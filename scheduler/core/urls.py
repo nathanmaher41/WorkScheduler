@@ -1,8 +1,24 @@
 from django.urls import path
-from .views import RegisterView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .views import ScheduleCreateView, ScheduleListView, ScheduleInviteView
-from .views import ScheduleMemberListView
+
+from .views import (
+    RegisterView,
+    ScheduleCreateView,
+    ScheduleListView,
+    ScheduleInviteView,
+    ScheduleMemberListView,
+    ScheduleSettingsUpdateView,
+    ShiftCreateView,
+    ShiftListView,
+    ShiftSwapRequestView,
+    ShiftSwapApproveView,
+    ShiftSwapRejectView,
+    ShiftSwapAdminApproveView,
+    IncomingSwapRequestsView,
+    TimeOffRequestCreateView,
+    TimeOffRequestManageView,
+    TimeOffRequestListView,
+)
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
@@ -12,4 +28,23 @@ urlpatterns = [
     path('schedules/', ScheduleListView.as_view(), name='schedule-list'),
     path('schedules/<int:schedule_id>/invite/', ScheduleInviteView.as_view(), name='schedule-invite'),
     path('schedules/<int:schedule_id>/members/', ScheduleMemberListView.as_view(), name='schedule-members'),
+    path('schedules/<int:schedule_id>/shifts/create/', ShiftCreateView.as_view(), name='shift-create'),
+    path('schedules/<int:schedule_id>/shifts/', ShiftListView.as_view(), name='shift-list'),
+    path('time-off/request/', TimeOffRequestCreateView.as_view(), name='time-off-create'),
+    path('time-off/manage/<int:request_id>/', TimeOffRequestManageView.as_view(), name='time-off-manage'),
+    path('schedules/<int:schedule_id>/time-off/', TimeOffRequestListView.as_view(), name='time-off-list'),
+    path('shifts/request-swap/', ShiftSwapRequestView.as_view(), name='shift-request-swap'),
+    path('shifts/<int:shift_id>/approve-swap/', ShiftSwapApproveView.as_view(), name='shift-approve-swap'),
+    path('shifts/<int:shift_id>/reject-swap/', ShiftSwapRejectView.as_view(), name='shift-reject-swap'),
+    path('shifts/my-incoming-swaps/', IncomingSwapRequestsView.as_view(), name='my-incoming-swaps'),
+    path('schedules/<int:schedule_id>/settings/', ScheduleSettingsUpdateView.as_view(), name='schedule-settings'),
+    path('shifts/swap/request/', ShiftSwapRequestView.as_view(), name='shift-swap-request'),
+    path('shifts/swap/approve/', ShiftSwapApproveView.as_view(), name='shift-swap-approve'),
+    path('shifts/swap/admin-approve/', ShiftSwapAdminApproveView.as_view(), name='shift-swap-admin-approve'),
+
+
+
+
+
+
 ]

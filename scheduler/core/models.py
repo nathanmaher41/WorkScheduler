@@ -46,6 +46,8 @@ class Shift(models.Model):
     is_swap_pending = models.BooleanField(default=False)
     swap_requested_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='swap_requests')
     swap_approved_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='swap_approvals')
+    swap_with = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
+    require_admin_swap_approval = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.employee.username} - {self.start_time} to {self.end_time}"

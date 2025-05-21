@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import Schedule, ScheduleMembership, Shift
+from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest
 
 
 
@@ -28,10 +28,11 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class ScheduleListSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
+    require_admin_swap_approval = serializers.BooleanField()
 
     class Meta:
         model = Schedule
-        fields = ['id', 'name', 'start_date', 'end_date', 'is_published', 'role']
+        fields = ['id', 'name', 'start_date', 'end_date', 'is_published', 'role', 'require_admin_swap_approval']
 
     def get_role(self, obj):
         user = self.context['request'].user
@@ -74,11 +75,11 @@ class ScheduleMemberSerializer(serializers.ModelSerializer):
         fields = ['username', 'role']
 
 class ShiftSerializer(serializers.ModelSerializer):
-    employee_username = serializers.CharField(write_only=True)
+    employee_name = serializers.CharField(source='employee.username', read_only=True)
 
     class Meta:
         model = Shift
-        fields = ['id', 'schedule', 'employee_username', 'start_time', 'end_time', 'position']
+        fields = ['id', 'schedule', 'start_time', 'end_time', 'position', 'employee_name']
 
     def validate_employee_username(self, value):
         try:
@@ -89,3 +90,25 @@ class ShiftSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         employee = validated_data.pop('employee_username')
         return Shift.objects.create(employee=employee, **validated_data)
+
+class TimeOffRequestCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TimeOffRequest
+        fields = ['id', 'start_date', 'end_date', 'reason']
+
+class TimeOffRequestManageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TimeOffRequest
+        fields = ['status']
+
+class TimeOffRequestDetailSerializer(serializers.ModelSerializer):
+    employee_username = serializers.CharField(source='employee.username', read_only=True)
+
+    class Meta:
+        model = TimeOffRequest
+        fields = ['id', 'employee_username', 'start_date', 'end_date', 'reason', 'status']
+
+class ScheduleSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Schedule
+        fields = ['require_admin_swap_approval']

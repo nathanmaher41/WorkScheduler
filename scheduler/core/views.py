@@ -16,6 +16,16 @@ from .serializers import (
     TimeOffRequestCreateSerializer,
     TimeOffRequestManageSerializer,
 )
+from django.core.mail import send_mail
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
+from django.urls import reverse
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth.tokens import default_token_generator
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from rest_framework.permissions import AllowAny
 
 User = get_user_model()
 
@@ -23,6 +33,38 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [AllowAny]
     serializer_class = RegisterSerializer
+
+    def perform_create(self, serializer):
+        user = serializer.save(is_active=False)  # Save first
+        print("Sending email to:", user.email)  # Now this works
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        activation_link = self.request.build_absolute_uri(
+            reverse('activate-user', kwargs={'uidb64': uid, 'token': token})
+        )
+        send_mail(
+            subject='Activate Your Account',
+            message=f'Click to activate: {activation_link}',
+            from_email='no-reply@example.com',
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+
+class ActivateUserView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, uidb64, token):
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = get_object_or_404(User, pk=uid)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            user = None
+
+        if user and default_token_generator.check_token(user, token):
+            user.is_active = True
+            user.save()
+            return HttpResponse("Account activated successfully.")
+        return HttpResponse("Invalid or expired activation link.", status=400)
 
 class ScheduleCreateView(generics.CreateAPIView):
     serializer_class = ScheduleListSerializer

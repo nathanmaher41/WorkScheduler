@@ -7,8 +7,8 @@ from django.db import models
 from django.utils import timezone
 
 class User(AbstractUser):
-    # No global role — handled per schedule via ScheduleMembership
-    pass
+    middle_name = models.CharField(max_length=30, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
 
 class Schedule(models.Model):
     name = models.CharField(max_length=100)

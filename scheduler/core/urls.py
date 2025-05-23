@@ -19,6 +19,9 @@ from .views import (
     TimeOffRequestManageView,
     TimeOffRequestListView,
     ActivateUserView,
+    UserSettingsView,
+    ResendActivationView,
+    UserProfileUpdateView
 )
 
 
@@ -44,5 +47,11 @@ urlpatterns = [
     path('shifts/swap/approve/', ShiftSwapApproveView.as_view(), name='shift-swap-approve'),
     path('shifts/swap/admin-approve/', ShiftSwapAdminApproveView.as_view(), name='shift-swap-admin-approve'),
     path('activate/<uidb64>/<token>/', ActivateUserView.as_view(), name='activate-user'),
+    path('user/settings/', UserSettingsView.as_view(), name='user-settings'),
+    path('resend-activation/', ResendActivationView.as_view(), name='resend-activation'),
+    path('api/profile/', UserProfileUpdateView.as_view(), name='user-profile'),
+
+
+
 
 ]

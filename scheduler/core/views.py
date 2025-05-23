@@ -15,6 +15,7 @@ from .serializers import (
     ShiftSerializer,
     TimeOffRequestCreateSerializer,
     TimeOffRequestManageSerializer,
+    UserProfileSerializer,
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -26,6 +27,8 @@ from django.contrib.auth.tokens import default_token_generator
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.shortcuts import redirect
 
 User = get_user_model()
 
@@ -63,7 +66,13 @@ class ActivateUserView(APIView):
         if user and default_token_generator.check_token(user, token):
             user.is_active = True
             user.save()
-            return HttpResponse("Account activated successfully.")
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+
+            frontend_url = f"http://localhost:5173/activate-success?access={access_token}&refresh={refresh_token}"
+            return redirect(frontend_url)
+
         return HttpResponse("Invalid or expired activation link.", status=400)
 
 class ScheduleCreateView(generics.CreateAPIView):
@@ -324,6 +333,57 @@ class ShiftSwapAdminApproveView(APIView):
             shift_b.save()
 
         return Response({"message": "Shift swap finalized by admin."})
+
+class UserSettingsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            "username": user.username,
+            "email": user.email,
+            "phone_number": user.phone_number,
+        })
+
+    def patch(self, request):
+        user = request.user
+        phone = request.data.get("phone_number")
+        if phone is not None:
+            user.phone_number = phone
+            user.save()
+        return Response({"message": "Settings updated"})
+
+class ResendActivationView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get('username')
+        try:
+            user = User.objects.get(username=username)
+            if user.is_active:
+                return Response({"message": "User is already active."})
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            activation_link = request.build_absolute_uri(
+                reverse('activate-user', kwargs={'uidb64': uid, 'token': token})
+            )
+            send_mail(
+                subject='Activate Your Account',
+                message=f'Click to activate: {activation_link}',
+                from_email='no-reply@example.com',
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+            return Response({"message": "Activation email resent."})
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=404)
+
+class UserProfileUpdateView(generics.RetrieveUpdateAPIView):
+    serializer_class = UserProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
 
 
         

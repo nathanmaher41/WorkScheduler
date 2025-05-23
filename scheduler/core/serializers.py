@@ -112,3 +112,8 @@ class ScheduleSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Schedule
         fields = ['require_admin_swap_approval']
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['first_name', 'middle_name', 'last_name', 'phone_number']

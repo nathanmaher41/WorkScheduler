@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from '../utils/axios';
 import { Link } from 'react-router-dom';
-import ThemeToggle from './ThemeToggle';
+import ThemeToggle from '../components/ThemeToggle';
 import PasswordInput from '../components/PasswordInput';
 
 export default function Login() {
@@ -44,7 +44,7 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             />
-          <button type="submit" className="bg-purple-600 text-white p-2 rounded hover:bg-blue-700 transition">
+          <button type="submit" className="bg-purple-500 text-white p-2 rounded hover:bg-purple-700 transition">
             Login
           </button>
           {error && <p className="text-red-500 text-sm">{error}</p>}

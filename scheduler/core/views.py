@@ -4,7 +4,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest
+from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, Calendar, CalendarMembership, CalendarRole
 from .permissions import IsScheduleAdmin
 from .serializers import (
     RegisterSerializer,
@@ -16,6 +16,11 @@ from .serializers import (
     TimeOffRequestCreateSerializer,
     TimeOffRequestManageSerializer,
     UserProfileSerializer,
+    CalendarSerializer,
+    ScheduleCreateSerializer,
+    CalendarMembershipSerializer,
+    CalendarRoleSerializer,
+    CalendarJoinSerializer,
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -29,6 +34,9 @@ from django.shortcuts import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import redirect
+from django.db.utils import IntegrityError
+import string
+import random
 
 User = get_user_model()
 
@@ -76,7 +84,7 @@ class ActivateUserView(APIView):
         return HttpResponse("Invalid or expired activation link.", status=400)
 
 class ScheduleCreateView(generics.CreateAPIView):
-    serializer_class = ScheduleListSerializer
+    serializer_class = ScheduleCreateSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
@@ -385,5 +393,160 @@ class UserProfileUpdateView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+class CalendarCreateView(generics.CreateAPIView):
+    serializer_class = CalendarSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def generate_unique_code(self, length=6):
+        chars = string.ascii_uppercase + string.digits
+        for _ in range(10):  # Try 10 times
+            code = ''.join(random.choices(chars, k=length))
+            if not Calendar.objects.filter(join_code=code).exists():
+                return code
+        raise ValueError("Could not generate a unique join code.")
+
+    def perform_create(self, serializer):
+        calendar = serializer.save(
+            created_by=self.request.user,
+            join_code=self.generate_unique_code()
+        )
+
+        # Always create core roles
+        CalendarRole.objects.create(calendar=calendar, name='Staff')
+
+        # Extract and sanitize
+        creator_title_raw = self.request.data.get("creator_title", "").strip()
+        extra_roles = self.request.data.get("roles", [])
+        add_creator_title = creator_title_raw and creator_title_raw.lower() not in ['admin', 'staff']
+
+        # Optionally create the creator's title as a role
+        creator_title_obj = None
+        if creator_title_raw:
+            # Normalize capitalization (e.g., Manager not manager)
+            existing = calendar.roles.filter(name__iexact=creator_title_raw).first()
+            creator_title_obj = existing or CalendarRole.objects.create(
+                calendar=calendar,
+                name=creator_title_raw.capitalize()
+            )
+
+        # Add any additional non-core roles
+        if isinstance(extra_roles, list):
+            for role_name in extra_roles:
+                if role_name.lower() not in ['staff', 'admin']:
+                    calendar.roles.get_or_create(name=role_name.capitalize())
+
+        # Now finally assign the membership correctly
+        CalendarMembership.objects.create(
+            user=self.request.user,
+            calendar=calendar,
+            title=creator_title_obj,
+            is_admin=True
+        )
+
+
+
+class CalendarListView(generics.ListAPIView):
+    serializer_class = CalendarSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Calendar.objects.filter(members=self.request.user)
+
+class CalendarInviteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, calendar_id):
+        username = request.data.get('username')
+        role = request.data.get('role', 'staff')
+
+        try:
+            calendar = Calendar.objects.get(id=calendar_id)
+        except Calendar.DoesNotExist:
+            return Response({"error": "Calendar not found."}, status=404)
+
+        # Only admins can invite
+        membership = CalendarMembership.objects.filter(user=request.user, calendar=calendar, role='admin').first()
+        if not membership:
+            return Response({"error": "You are not an admin of this calendar."}, status=403)
+
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=404)
+
+        _, created = CalendarMembership.objects.get_or_create(user=user, calendar=calendar, defaults={'role': role})
+        if not created:
+            return Response({"message": "User already in calendar."})
+
+        return Response({"message": f"{user.username} added to calendar as {role}."})
+
+class CalendarJoinByCodeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        code = request.data.get('join_code')
+        title_id = request.data.get('title_id')
+        color = request.data.get('color')
+
+        try:
+            calendar = Calendar.objects.get(join_code=code)
+        except Calendar.DoesNotExist:
+            return Response({"error": "Invalid join code."}, status=404)
+
+        if CalendarMembership.objects.filter(calendar=calendar, color=color).exists():
+            return Response({"error": "Color already taken."}, status=400)
+
+        title = None
+        if calendar.roles.exists():
+            if not title_id:
+                return Response({"error": "Title is required."}, status=400)
+            try:
+                title = calendar.roles.get(id=title_id)
+            except CalendarRole.DoesNotExist:
+                return Response({"error": "Invalid title selected."}, status=400)
+
+        _, created = CalendarMembership.objects.get_or_create(
+            user=request.user,
+            calendar=calendar,
+            defaults={
+                'title': title,
+                'color': color,
+                'is_admin': False  # must be granted later by another admin
+            }
+        )
+
+        if not created:
+            return Response({"message": "Already a member of this calendar."})
+
+        return Response({"message": f"Joined calendar: {calendar.name}"})
+
+class CalendarMemberListView(generics.ListAPIView):
+    serializer_class = CalendarMembershipSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        calendar_id = self.kwargs['calendar_id']
+        return CalendarMembership.objects.filter(calendar_id=calendar_id)
+
+class CalendarDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Calendar.objects.all()
+    serializer_class = CalendarSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class CalendarLookupByCodeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        code = request.query_params.get('code')
+        if not code:
+            return Response({'error': 'Missing join code.'}, status=400)
+
+        try:
+            calendar = Calendar.objects.get(join_code=code)
+        except Calendar.DoesNotExist:
+            return Response({'error': 'Invalid join code.'}, status=404)
+
+        serializer = CalendarJoinSerializer(calendar)
+        return Response(serializer.data)
 
         

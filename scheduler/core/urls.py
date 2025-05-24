@@ -21,7 +21,14 @@ from .views import (
     ActivateUserView,
     UserSettingsView,
     ResendActivationView,
-    UserProfileUpdateView
+    UserProfileUpdateView,
+    CalendarCreateView, 
+    CalendarListView,
+    CalendarInviteView,
+    CalendarJoinByCodeView,
+    CalendarMemberListView,
+    CalendarDetailView,
+    CalendarLookupByCodeView,
 )
 
 
@@ -49,8 +56,14 @@ urlpatterns = [
     path('activate/<uidb64>/<token>/', ActivateUserView.as_view(), name='activate-user'),
     path('user/settings/', UserSettingsView.as_view(), name='user-settings'),
     path('resend-activation/', ResendActivationView.as_view(), name='resend-activation'),
-    path('api/profile/', UserProfileUpdateView.as_view(), name='user-profile'),
-
+    path('profile/', UserProfileUpdateView.as_view(), name='user-profile'),
+    path('calendars/', CalendarListView.as_view(), name='calendar-list'),
+    path('calendars/create/', CalendarCreateView.as_view(), name='calendar-create'),
+    path('calendars/<int:calendar_id>/invite/', CalendarInviteView.as_view(), name='calendar-invite'),
+    path('calendars/join/', CalendarJoinByCodeView.as_view(), name='calendar-join'),
+    path('calendars/<int:calendar_id>/members/', CalendarMemberListView.as_view(), name='calendar-members'),
+    path('calendars/<int:pk>/', CalendarDetailView.as_view(), name='calendar-detail'),
+    path('calendars/lookup/', CalendarLookupByCodeView.as_view(), name='calendar-lookup'),
 
 
 

@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest
+from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, CalendarMembership, Calendar, CalendarRole
+
 
 
 
@@ -25,6 +26,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(**validated_data)
         return user
 
+class ScheduleCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Schedule
+        fields = ['name', 'start_date', 'end_date']
 
 class ScheduleListSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
@@ -117,3 +122,64 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['first_name', 'middle_name', 'last_name', 'phone_number']
+
+    def validate(self, data):
+        errors = {}
+
+        if not data.get('first_name'):
+            errors['first_name'] = 'First name is required.'
+        if not data.get('last_name'):
+            errors['last_name'] = 'Last name is required.'
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return data
+
+class CalendarMembershipSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CalendarMembership
+        fields = ['username', 'full_name', 'role']
+
+    def get_full_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip()
+
+    def get_role(self, obj):
+        if obj.is_admin and obj.title:
+            return f"ADMIN - {obj.title.name.upper()}"
+        elif obj.is_admin:
+            return "ADMIN"
+        elif obj.title:
+            return obj.title.name.upper()
+        return "None"
+
+
+
+class CalendarRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarRole
+        fields = ['id', 'name']
+
+class CalendarSerializer(serializers.ModelSerializer):
+    members = CalendarMembershipSerializer(source='calendarmembership_set', many=True, read_only=True)
+    roles = CalendarRoleSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Calendar
+        fields = ['id', 'name', 'join_code', 'members', 'roles']
+
+class CalendarJoinSerializer(serializers.ModelSerializer):
+    roles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Calendar
+        fields = ['id', 'name', 'roles']
+
+    def get_roles(self, obj):
+        roles = obj.roles.exclude(name__iexact='admin')
+        return CalendarRoleSerializer(roles, many=True).data
+

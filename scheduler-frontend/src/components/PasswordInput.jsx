@@ -24,7 +24,7 @@ export default function PasswordInput({ name, value, onChange, placeholder }) {
         placeholder={placeholder}
         value={value}
         onChange={handleChange}
-        className="w-full p-2 pr-10 border border-gray-600 rounded bg-gray-700 text-white placeholder-gray-400 focus:outline-blue-500"
+        className="w-full p-2 pr-10 border rounded bg-white text-black placeholder-gray-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 border-gray-300 dark:border-gray-600 focus:outline-blue-500"
       />
       <div
         onClick={() => setVisible(!visible)}

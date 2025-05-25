@@ -11,6 +11,11 @@ import uuid
 class User(AbstractUser):
     middle_name = models.CharField(max_length=30, blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
+    pronouns = models.CharField(max_length=50, blank=True, null=True)
+    show_pronouns = models.BooleanField(default=True)
+    show_middle_name = models.BooleanField(default=True)
+    notify_email = models.BooleanField(default=True)
+    notify_sms = models.BooleanField(default=False)
 
 class Schedule(models.Model):
     name = models.CharField(max_length=100)

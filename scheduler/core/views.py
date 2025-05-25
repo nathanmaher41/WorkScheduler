@@ -37,6 +37,7 @@ from django.shortcuts import redirect
 from django.db.utils import IntegrityError
 import string
 import random
+from rest_framework.exceptions import PermissionDenied
 
 User = get_user_model()
 
@@ -351,15 +352,32 @@ class UserSettingsView(APIView):
             "username": user.username,
             "email": user.email,
             "phone_number": user.phone_number,
+            "first_name": user.first_name,
+            "middle_name": user.middle_name,
+            "last_name": user.last_name,
+            "pronouns": getattr(user, "pronouns", ""),
+            "show_pronouns": getattr(user, "show_pronouns", True),
+            "show_middle_name": getattr(user, "show_middle_name", True),
+            "notify_email": getattr(user, "notify_email", True),
+            "notify_sms": getattr(user, "notify_sms", False),
         })
 
     def patch(self, request):
         user = request.user
-        phone = request.data.get("phone_number")
-        if phone is not None:
-            user.phone_number = phone
-            user.save()
+        data = request.data
+
+        fields = [
+            "phone_number", "first_name", "middle_name", "last_name",
+            "pronouns", "show_pronouns", "show_middle_name",
+            "notify_email", "notify_sms"
+        ]
+        for field in fields:
+            if field in data:
+                setattr(user, field, data[field])
+
+        user.save()
         return Response({"message": "Settings updated"})
+
 
 class ResendActivationView(APIView):
     permission_classes = [AllowAny]
@@ -516,7 +534,8 @@ class CalendarJoinByCodeView(APIView):
         )
 
         if not created:
-            return Response({"message": "Already a member of this calendar."})
+            return Response({"message": "Already a member of this calendar."}, status=400)
+
 
         return Response({"message": f"Joined calendar: {calendar.name}"})
 
@@ -533,6 +552,19 @@ class CalendarDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CalendarSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_destroy(self, instance):
+        user = self.request.user
+        is_admin = CalendarMembership.objects.filter(
+            calendar=instance,
+            user=user,
+            is_admin=True
+        ).exists()
+
+        if not is_admin:
+            raise PermissionDenied("You do not have permission to delete this calendar.")
+        
+        instance.delete()
+
 class CalendarLookupByCodeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -546,7 +578,10 @@ class CalendarLookupByCodeView(APIView):
         except Calendar.DoesNotExist:
             return Response({'error': 'Invalid join code.'}, status=404)
 
+        already_joined = CalendarMembership.objects.filter(calendar=calendar, user=request.user).exists()
         serializer = CalendarJoinSerializer(calendar)
-        return Response(serializer.data)
+        data = serializer.data
+        data['already_joined'] = already_joined
+        return Response(data)
 
         

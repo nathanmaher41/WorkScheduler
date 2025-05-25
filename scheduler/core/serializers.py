@@ -121,7 +121,19 @@ class ScheduleSettingsSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'middle_name', 'last_name', 'phone_number']
+        fields = [
+            'first_name',
+            'middle_name',
+            'last_name',
+            'phone_number',
+            'pronouns',
+            'show_pronouns',
+            'show_middle_name',
+            'notify_email',
+            'notify_sms',
+            'username',
+            'email',
+        ]
 
     def validate(self, data):
         errors = {}
@@ -140,10 +152,11 @@ class CalendarMembershipSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     full_name = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
+    is_admin = serializers.BooleanField(read_only=True)  # 👈 Add this line
 
     class Meta:
         model = CalendarMembership
-        fields = ['username', 'full_name', 'role']
+        fields = ['username', 'full_name', 'role', 'is_admin']  # 👈 Add 'is_admin' here
 
     def get_full_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip()
@@ -174,12 +187,15 @@ class CalendarSerializer(serializers.ModelSerializer):
 
 class CalendarJoinSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
+    used_colors = serializers.SerializerMethodField()
 
     class Meta:
         model = Calendar
-        fields = ['id', 'name', 'roles']
+        fields = ['id', 'name', 'roles', 'used_colors']
 
     def get_roles(self, obj):
         roles = obj.roles.exclude(name__iexact='admin')
         return CalendarRoleSerializer(roles, many=True).data
+    def get_used_colors(self, obj):
+        return list(obj.calendarmembership_set.exclude(color__isnull=True).values_list('color', flat=True))
 

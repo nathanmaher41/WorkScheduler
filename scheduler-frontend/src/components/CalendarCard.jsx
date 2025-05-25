@@ -28,7 +28,8 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
 
 {isMenuOpen && (
   <div
-    className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-700 shadow-lg rounded-md z-10"
+    className={`absolute right-0 mt-2 w-40 shadow-lg rounded-md z-10 
+      ${isSelected ? 'bg-white text-gray-800 dark:bg-gray-700 dark:text-white' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white'}`}
     onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => {
@@ -48,17 +49,19 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
           >
             📤 Share
           </button>
-          <button
-            onClick={() => {
-              if (confirm(`Delete calendar "${calendar.name}"?`)) {
-                onDelete(calendar.id);
-              }
-              onToggleMenu();
-            }}
-            className="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600"
-          >
-            🗑️ Delete
-          </button>
+          {onDelete && (
+            <button
+              onClick={() => {
+                if (confirm(`Delete calendar "${calendar.name}"?`)) {
+                  onDelete(calendar.id);
+                }
+                onToggleMenu();
+              }}
+              className="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600"
+            >
+              🗑️ Delete
+            </button>
+          )}
         </div>
       )}
       </div>

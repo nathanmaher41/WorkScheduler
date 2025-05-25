@@ -6,3 +6,14 @@
 :root {
   font-family: system-ui, sans-serif;
 }
+
+/* This ensures the today cell in dark mode is white with black text */
+/* Force black number text for today's cell in dark mode */
+.dark .rbc-today .rbc-button-link {
+  color: black !important;
+}
+.dark .rbc-today {
+  background-color: white !important;
+}
+
+.test-rule { border: 1px solid red; }

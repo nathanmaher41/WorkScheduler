@@ -8,10 +8,8 @@ export default function PasswordInput({ name, value, onChange, placeholder }) {
 
   const handleChange = (e) => {
     if (e?.target?.name && typeof onChange === 'function') {
-      // For forms with multiple fields (e.g., Register)
       onChange(e);
     } else if (typeof onChange === 'function') {
-      // For standalone fields (e.g., Login)
       onChange(e.target.value);
     }
   };

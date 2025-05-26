@@ -6,7 +6,7 @@ export default function EyelashOpen() {
     <img
       src={EyeOpen}
       alt="Open Eye with Lashes"
-      className="w-6 h-6" // Adjust size here
+      className="w-6 h-6"
     />
   );
 }

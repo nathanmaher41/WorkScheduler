@@ -15,7 +15,10 @@ export default function Login() {
     e.preventDefault();
     try {
       const res = await axios.post('/api/login/', { username, password });
-      localStorage.setItem('token', res.data.access);
+      localStorage.setItem('access', res.data.access);
+      localStorage.setItem('refresh', res.data.refresh);
+      localStorage.setItem('username', username); // Optional: useful elsewhere
+
       navigate('/dashboard');
     } catch (err) {
       if (err.response?.status === 401) {

@@ -33,11 +33,11 @@ class ScheduleCreateSerializer(serializers.ModelSerializer):
 
 class ScheduleListSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    require_admin_swap_approval = serializers.BooleanField()
+    #require_admin_swap_approval = serializers.BooleanField()
 
     class Meta:
         model = Schedule
-        fields = ['id', 'name', 'start_date', 'end_date', 'is_published', 'role', 'require_admin_swap_approval']
+        fields = ['id', 'name', 'start_date', 'end_date', 'is_published', 'role']#'require_admin_swap_approval'
 
     def get_role(self, obj):
         user = self.context['request'].user
@@ -81,20 +81,23 @@ class ScheduleMemberSerializer(serializers.ModelSerializer):
 
 class ShiftSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source='employee.username', read_only=True)
+    employee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    schedule = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Shift
-        fields = ['id', 'schedule', 'start_time', 'end_time', 'position', 'employee_name']
+        fields = ['id', 'schedule', 'start_time', 'end_time', 'position', 'employee', 'employee_name']
 
-    def validate_employee_username(self, value):
-        try:
-            return User.objects.get(username=value)
-        except User.DoesNotExist:
-            raise serializers.ValidationError("User not found.")
 
-    def create(self, validated_data):
-        employee = validated_data.pop('employee_username')
-        return Shift.objects.create(employee=employee, **validated_data)
+    # def validate_employee_username(self, value):
+    #     try:
+    #         return User.objects.get(username=value)
+    #     except User.DoesNotExist:
+    #         raise serializers.ValidationError("User not found.")
+
+    # def create(self, validated_data):
+    #     employee = validated_data.pop('employee_username')
+    #     return Shift.objects.create(employee=employee, **validated_data)
 
 class TimeOffRequestCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -149,14 +152,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return data
 
 class CalendarMembershipSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     full_name = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
-    is_admin = serializers.BooleanField(read_only=True)  # 👈 Add this line
+    is_admin = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = CalendarMembership
-        fields = ['username', 'full_name', 'role', 'is_admin']  # 👈 Add 'is_admin' here
+        fields = ['id', 'username', 'full_name', 'role', 'is_admin']
 
     def get_full_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip()

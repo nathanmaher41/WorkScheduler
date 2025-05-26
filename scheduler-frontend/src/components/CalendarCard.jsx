@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMenuOpen, onToggleMenu }) {
-  //const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   const dropdownItemClass = "w-full text-left px-4 py-2 text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600";
 
   return (
     <div
-      onClick={() => onSelect(calendar)}  // ✅ clicking selects and shows members
+      onClick={() => onSelect(calendar)}
       className={`relative p-4 rounded-lg shadow cursor-pointer transition
         ${isSelected ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white'}
       `}
@@ -19,7 +18,7 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
         <button
   onClick={(e) => {
     e.stopPropagation();
-    onToggleMenu(); // use parent handler
+    onToggleMenu();
   }}
   className={`${isSelected ? 'text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-300'}`}
 >
@@ -34,7 +33,7 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
           <button
             onClick={() => {
               navigator.clipboard.writeText(calendar.join_code);
-              onToggleMenu(); // closes after action
+              onToggleMenu();
             }}
             className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600"
           >

@@ -47,8 +47,8 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
 
     def perform_create(self, serializer):
-        user = serializer.save(is_active=False)  # Save first
-        print("Sending email to:", user.email)  # Now this works
+        user = serializer.save(is_active=False)
+        print("Sending email to:", user.email)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         activation_link = self.request.build_absolute_uri(
@@ -89,7 +89,17 @@ class ScheduleCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        schedule = serializer.save(created_by=self.request.user)
+        calendar_id = self.request.data.get("calendar_id")
+        if not calendar_id:
+            raise ValidationError("calendar_id is required.")
+
+        calendar = get_object_or_404(Calendar, id=calendar_id)
+
+        schedule = serializer.save(
+            created_by=self.request.user,
+            calendar=calendar
+        )
+
         ScheduleMembership.objects.create(
             user=self.request.user,
             schedule=schedule,
@@ -98,10 +108,18 @@ class ScheduleCreateView(generics.CreateAPIView):
 
 class ScheduleListView(generics.ListAPIView):
     serializer_class = ScheduleListSerializer
-    permission_classes = [permissions.IsAuthenticated]  # No IsScheduleAdmin here
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Schedule.objects.filter(schedulemembership__user=self.request.user)
+        user = self.request.user
+        calendar_id = self.request.query_params.get("calendar_id")
+
+        queryset = Schedule.objects.filter(schedulemembership__user=user)
+
+        if calendar_id:
+            queryset = queryset.filter(calendar_id=calendar_id)
+
+        return queryset
 
 class ScheduleInviteView(generics.GenericAPIView):
     serializer_class = ScheduleInviteSerializer
@@ -136,6 +154,18 @@ class ShiftCreateView(generics.CreateAPIView):
         schedule = self.get_object()
         serializer.save(schedule=schedule)
 
+    def post(self, request, *args, **kwargs):
+        print("RAW POST DATA:", request.data)
+        schedule = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        
+        if not serializer.is_valid():
+            print("SHIFT CREATE ERROR:", serializer.errors) 
+            return Response(serializer.errors, status=400)
+        
+        serializer.save(schedule=schedule)
+        return Response(serializer.data, status=201)
+
 class ShiftListView(generics.ListAPIView):
     serializer_class = ShiftSerializer
     permission_classes = [permissions.IsAuthenticated, IsScheduleAdmin]
@@ -160,7 +190,7 @@ class TimeOffRequestManageView(APIView):
         except TimeOffRequest.DoesNotExist:
             return Response({"error": "Request not found."}, status=http_status.HTTP_404_NOT_FOUND)
 
-        # You could add more logic to verify admin permissions here
+        # could add more logic to verify admin permissions here
 
         serializer = TimeOffRequestManageSerializer(time_off_request, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -200,7 +230,7 @@ class ShiftSwapRequestView(APIView):
 
         shift_a.is_swap_pending = True
         shift_a.swap_requested_by = request.user
-        shift_a.swap_approved_by = None  # Reset approval in case
+        shift_a.swap_approved_by = None
         shift_a.save()
 
         return Response({"message": "Swap request sent.", "requires_admin_approval": schedule.require_admin_swap_approval})
@@ -326,7 +356,7 @@ class ShiftSwapAdminApproveView(APIView):
         if not shift_a.is_swap_pending or shift_a.swap_requested_by is None or shift_a.swap_approved_by is None:
             return Response({"error": "Swap has not been approved by the target employee yet."}, status=status.HTTP_400_BAD_REQUEST)
 
-        self.check_object_permissions(request, schedule)  # Use IsScheduleAdmin to confirm admin access
+        self.check_object_permissions(request, schedule)  # IsScheduleAdmin to confirm admin access
 
         # Perform the swap
         with transaction.atomic():
@@ -336,7 +366,7 @@ class ShiftSwapAdminApproveView(APIView):
 
             shift_a.is_swap_pending = False
             shift_a.swap_requested_by = None
-            # Keep the swap_approved_by to reflect employee's approval
+            # swap_approved_by to reflect employee's approval
 
             shift_a.save()
             shift_b.save()
@@ -417,7 +447,7 @@ class CalendarCreateView(generics.CreateAPIView):
 
     def generate_unique_code(self, length=6):
         chars = string.ascii_uppercase + string.digits
-        for _ in range(10):  # Try 10 times
+        for _ in range(10):
             code = ''.join(random.choices(chars, k=length))
             if not Calendar.objects.filter(join_code=code).exists():
                 return code
@@ -437,7 +467,6 @@ class CalendarCreateView(generics.CreateAPIView):
         extra_roles = self.request.data.get("roles", [])
         add_creator_title = creator_title_raw and creator_title_raw.lower() not in ['admin', 'staff']
 
-        # Optionally create the creator's title as a role
         creator_title_obj = None
         if creator_title_raw:
             # Normalize capitalization (e.g., Manager not manager)
@@ -453,7 +482,7 @@ class CalendarCreateView(generics.CreateAPIView):
                 if role_name.lower() not in ['staff', 'admin']:
                     calendar.roles.get_or_create(name=role_name.capitalize())
 
-        # Now finally assign the membership correctly
+        # assign the membership correctly
         CalendarMembership.objects.create(
             user=self.request.user,
             calendar=calendar,

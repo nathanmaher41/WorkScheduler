@@ -10,9 +10,9 @@ export default function ActivateSuccess() {
     const refresh = searchParams.get('refresh');
 
     if (access && refresh) {
-      localStorage.setItem('token', access);
+      localStorage.setItem('access', access);
       localStorage.setItem('refresh', refresh);
-      navigate('/complete-profile'); // ✅ auto-login after activation
+      navigate('/complete-profile');
     }
   }, [navigate, searchParams]);
 

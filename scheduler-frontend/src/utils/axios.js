@@ -6,17 +6,17 @@ const instance = axios.create({
 
 // Attach access token to every request
 instance.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const access = localStorage.getItem('access');
+  if (access) {
+    config.headers.Authorization = `Bearer ${access}`;
   }
   return config;
 });
 
-// Handle 401 errors and attempt refresh
+// Handle token refresh if access is expired
 instance.interceptors.response.use(
-  response => response,
-  async error => {
+  (response) => response,
+  async (error) => {
     const originalRequest = error.config;
 
     if (
@@ -29,14 +29,17 @@ instance.interceptors.response.use(
         const res = await axios.post('http://localhost:8000/api/refresh/', {
           refresh: localStorage.getItem('refresh'),
         });
-        localStorage.setItem('token', res.data.access);
+
+        // Save new access token
+        localStorage.setItem('access', res.data.access);
+
+        // Retry original request with new token
         originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
         return instance(originalRequest);
       } catch (refreshError) {
-        // refresh token is invalid/expired
-        localStorage.removeItem('token');
+        localStorage.removeItem('access');
         localStorage.removeItem('refresh');
-        window.location.href = '/login'; // force logout
+        window.location.href = '/login';
       }
     }
 

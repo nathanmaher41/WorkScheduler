@@ -19,6 +19,7 @@ class User(AbstractUser):
 
 class Schedule(models.Model):
     name = models.CharField(max_length=100)
+    calendar = models.ForeignKey('Calendar', on_delete=models.CASCADE, related_name='schedules', null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='schedules_created')
     start_date = models.DateField()
     end_date = models.DateField()

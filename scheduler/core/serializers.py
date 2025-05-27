@@ -80,24 +80,32 @@ class ScheduleMemberSerializer(serializers.ModelSerializer):
         fields = ['username', 'role']
 
 class ShiftSerializer(serializers.ModelSerializer):
-    employee_name = serializers.CharField(source='employee.username', read_only=True)
+    employee_name = serializers.SerializerMethodField()
     employee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     schedule = serializers.PrimaryKeyRelatedField(read_only=True)
+    color = serializers.SerializerMethodField()
 
     class Meta:
         model = Shift
-        fields = ['id', 'schedule', 'start_time', 'end_time', 'position', 'employee', 'employee_name']
+        fields = [
+            'id', 'schedule', 'start_time', 'end_time',
+            'position', 'employee', 'employee_name', 'color'
+        ]
+
+    def get_employee_name(self, obj):
+        first = obj.employee.first_name or ""
+        last = obj.employee.last_name or ""
+        return f"{first} {last}".strip()
+
+    def get_color(self, obj):
+        calendar = obj.schedule.calendar
+        try:
+            membership = CalendarMembership.objects.get(user=obj.employee, calendar=calendar)
+            return membership.color
+        except CalendarMembership.DoesNotExist:
+            return "#8b5cf6"  # fallback
 
 
-    # def validate_employee_username(self, value):
-    #     try:
-    #         return User.objects.get(username=value)
-    #     except User.DoesNotExist:
-    #         raise serializers.ValidationError("User not found.")
-
-    # def create(self, validated_data):
-    #     employee = validated_data.pop('employee_username')
-    #     return Shift.objects.create(employee=employee, **validated_data)
 
 class TimeOffRequestCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -125,6 +133,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
+            'id',
             'first_name',
             'middle_name',
             'last_name',
@@ -203,3 +212,22 @@ class CalendarJoinSerializer(serializers.ModelSerializer):
     def get_used_colors(self, obj):
         return list(obj.calendarmembership_set.exclude(color__isnull=True).values_list('color', flat=True))
 
+class CalendarMembershipSimpleSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source='user.id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    is_admin = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CalendarMembership
+        fields = ['id', 'username', 'full_name', 'role', 'is_admin']
+
+    def get_full_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip()
+
+    def get_role(self, obj):
+        return obj.title.name.upper() if obj.title else "None"
+
+    def get_is_admin(self, obj):
+        return obj.is_admin

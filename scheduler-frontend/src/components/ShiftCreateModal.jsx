@@ -12,16 +12,20 @@ export default function ShiftCreateModal({
   members
 }) {
   const [employee, setEmployee] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [startHourMinute, setStartHourMinute] = useState('');
+  const [startPeriod, setStartPeriod] = useState('AM');
+  const [endHourMinute, setEndHourMinute] = useState('');
+  const [endPeriod, setEndPeriod] = useState('PM');
   const [role, setRole] = useState('');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (!isOpen) {
       setEmployee('');
-      setStartTime('');
-      setEndTime('');
+      setStartHourMinute('');
+      setStartPeriod('AM');
+      setEndHourMinute('');
+      setEndPeriod('PM');
       setRole('');
       setNotes('');
     }
@@ -37,14 +41,29 @@ export default function ShiftCreateModal({
     }
   };
 
+  function convertTo24Hour(time, period) {
+    let [hours, minutes] = time.split(':').map(Number);
+    if (period === 'PM' && hours < 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    return { hours, minutes };
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const dateStr = selectedDate.toISOString().split('T')[0];
+      const { hours: startH, minutes: startM } = convertTo24Hour(startHourMinute, startPeriod);
+      const { hours: endH, minutes: endM } = convertTo24Hour(endHourMinute, endPeriod);
+
+      const start = new Date(selectedDate);
+      start.setHours(startH, startM, 0, 0);
+
+      const end = new Date(selectedDate);
+      end.setHours(endH, endM, 0, 0);
+
       const res = await axios.post(`/api/schedules/${scheduleId}/shifts/create/`, {
         employee,
-        start_time: `${dateStr}T${startTime}`,
-        end_time: `${dateStr}T${endTime}`,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
         position: role,
         notes
       });
@@ -72,38 +91,59 @@ export default function ShiftCreateModal({
               required
             >
               <option value="">Select...</option>
-              {members
-                .filter((m) => m && m.id)
-                .map((member) => (
-                    <option key={`emp-${member.id}`} value={member.id}>
-                    {member.full_name || member.username}
-                    </option>
-                ))}
-
+              {members.filter(m => m && m.id).map((member) => (
+                <option key={`emp-${member.id}`} value={member.id}>
+                  {member.full_name || member.username}
+                </option>
+              ))}
             </select>
           </div>
+
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Start Time</label>
-              <input
-                type="time"
-                className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                required
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="hh:mm"
+                  className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+                  value={startHourMinute}
+                  onChange={(e) => setStartHourMinute(e.target.value)}
+                  required
+                />
+                <select
+                  className="border rounded px-2 py-2 dark:bg-gray-700 dark:text-white"
+                  value={startPeriod}
+                  onChange={(e) => setStartPeriod(e.target.value)}
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
             <div className="flex-1">
               <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">End Time</label>
-              <input
-                type="time"
-                className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                required
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="hh:mm"
+                  className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+                  value={endHourMinute}
+                  onChange={(e) => setEndHourMinute(e.target.value)}
+                  required
+                />
+                <select
+                  className="border rounded px-2 py-2 dark:bg-gray-700 dark:text-white"
+                  value={endPeriod}
+                  onChange={(e) => setEndPeriod(e.target.value)}
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
           </div>
+
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
             <input
@@ -113,6 +153,7 @@ export default function ShiftCreateModal({
               onChange={(e) => setRole(e.target.value)}
             />
           </div>
+
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
             <textarea
@@ -122,6 +163,7 @@ export default function ShiftCreateModal({
               rows={3}
             />
           </div>
+
           <div className="flex justify-end gap-2">
             <button
               type="button"

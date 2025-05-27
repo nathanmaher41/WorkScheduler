@@ -40,13 +40,54 @@ export default function Register() {
         <h1 className="text-2xl font-bold mb-1">Register</h1>
         <p className="text-gray-500 mb-6">Create your account below.</p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <input name="username" type="text" placeholder="Username" value={form.username} onChange={handleChange} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 border-gray-300 dark:border-gray-600 focus:outline-blue-500" />
-          <input name="email" type="email" placeholder="Email" value={form.email} onChange={handleChange} className="w-full p-2 border rounded bg-white text-black placeholder-gray-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 border-gray-300 dark:border-gray-600 focus:outline-blue-500" />
-          <PasswordInput name="password" placeholder="Password" value={form.password} onChange={handleChange}/>
-          <PasswordInput name="password2" placeholder="Confirm Password" value={form.password2} onChange={handleChange}/>
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+            <input
+              name="username"
+              type="text"
+              placeholder="Username"
+              value={form.username}
+              onChange={handleChange}
+              className="w-full p-2 border rounded bg-white text-black placeholder-gray-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 border-gray-300 dark:border-gray-600 focus:outline-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+            <input
+              name="email"
+              type="email"
+              placeholder="Email"
+              value={form.email}
+              onChange={handleChange}
+              className="w-full p-2 border rounded bg-white text-black placeholder-gray-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 border-gray-300 dark:border-gray-600 focus:outline-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+            <PasswordInput
+              name="password"
+              placeholder="Password"
+              value={form.password}
+              onChange={handleChange}
+            />
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Confirm Password</label>
+            <PasswordInput
+              name="password2"
+              placeholder="Confirm Password"
+              value={form.password2}
+              onChange={handleChange}
+            />
+          </div>
+
           <button type="submit" className="bg-purple-500 text-white p-2 rounded hover:bg-purple-700 transition">
             Register
           </button>
+
           {error && <p className="text-red-500 text-sm">{error}</p>}
         </form>
         <p className="text-sm text-gray-700 dark:text-gray-300 mt-4">

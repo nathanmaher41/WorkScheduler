@@ -21,6 +21,7 @@ from .serializers import (
     CalendarMembershipSerializer,
     CalendarRoleSerializer,
     CalendarJoinSerializer,
+    CalendarMembershipSimpleSerializer,
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -95,16 +96,28 @@ class ScheduleCreateView(generics.CreateAPIView):
 
         calendar = get_object_or_404(Calendar, id=calendar_id)
 
+        # Create the schedule
         schedule = serializer.save(
             created_by=self.request.user,
             calendar=calendar
         )
 
+        # Add creator as admin
         ScheduleMembership.objects.create(
             user=self.request.user,
             schedule=schedule,
             role='admin'
         )
+
+        # Add all other calendar members as viewers
+        members = CalendarMembership.objects.filter(calendar=calendar).exclude(user=self.request.user)
+        for member in members:
+            ScheduleMembership.objects.get_or_create(
+                user=member.user,
+                schedule=schedule,
+                role='viewer'
+            )
+
 
 class ScheduleListView(generics.ListAPIView):
     serializer_class = ScheduleListSerializer
@@ -569,7 +582,7 @@ class CalendarJoinByCodeView(APIView):
         return Response({"message": f"Joined calendar: {calendar.name}"})
 
 class CalendarMemberListView(generics.ListAPIView):
-    serializer_class = CalendarMembershipSerializer
+    serializer_class = CalendarMembershipSimpleSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):

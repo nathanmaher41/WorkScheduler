@@ -15,9 +15,9 @@
 ## 🔨 Near-Term Improvements
 
 ### 🔐 Permissions & Role UX
-- [ ] Hide "Create Shift" for non-admins
-- [ ] Remove `ADMIN -` prefix in shift dropdown (keep in dashboard only)
-- [ ] Color-code shifts by user’s calendar color
+- [x] Hide "Create Shift" for non-admins
+- [x] Remove `ADMIN -` prefix in shift dropdown (keep in dashboard only)
+- [x] Color-code shifts by user’s calendar color
 
 ### 🗂️ Sorting & Filtering
 - [ ] Sort members by:

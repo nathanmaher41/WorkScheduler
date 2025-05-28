@@ -31,14 +31,14 @@ export default function CalendarView() {
           const start = new Date(shift.start_time);
           const end = new Date(shift.end_time);
           const timeStr = `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-          const fullName = `${shift.employee_first_name || ''} ${shift.employee_last_name || ''}`.trim() || shift.employee_name || shift.employee || 'Unknown';
+          const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
           return {
             id: shift.id,
             title: `${fullName}\n${timeStr}`,
             start,
             end,
-            backgroundColor: 'transparent',
-            textColor: shift.color || '#8b5cf6',
+            backgroundColor: shift.color || '#8b5cf6',
+            textColor: 'white',
             extendedProps: { shiftData: shift },
             allDay: false
           };
@@ -76,7 +76,7 @@ export default function CalendarView() {
 
   const handleDateClick = (info) => {
     if (!isCalendarAdmin || !activeSchedule) return;
-    setSelectedDate(new Date(info.dateStr));
+    setSelectedDate(info.date);
     setShowShiftModal(true);
   };
 
@@ -97,16 +97,26 @@ export default function CalendarView() {
     return date < scheduleStart || date > scheduleEnd;
   };
 
-  const scrollToFirstEvent = (calendarApi) => {
-    if (!calendarApi) return;
-    const view = calendarApi.view;
-    if (view.type === 'timeGridDay' || view.type === 'timeGridWeek') {
-      const firstEvent = calendarApi.getEvents().sort((a, b) => a.start - b.start)[0];
-      if (firstEvent) {
-        calendarApi.scrollToTime(firstEvent.start);
-      }
-    }
-  };
+  function getScrollTime(date, events) {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const nextDay = new Date(dayStart);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const eventsToday = events.filter(event =>
+      event.start >= dayStart && event.start < nextDay
+    );
+
+    if (eventsToday.length === 0) return '08:00:00';
+
+    const earliest = eventsToday.reduce((min, curr) =>
+      curr.start < min.start ? curr : min
+    );
+
+    const hour = earliest.start.getHours();
+    const clamped = Math.max(5, Math.min(hour, 12));
+    return `${String(clamped).padStart(2, '0')}:00:00`;
+  }
 
   return (
     <div className="flex p-6 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
@@ -130,13 +140,26 @@ export default function CalendarView() {
             height={700}
             eventDisplay="block"
             slotEventOverlap={false}
-            slotLabelClassNames={() => ['!border-none']}
-            slotLaneClassNames={() => ['!border-none']}
-            eventContent={(arg) => (
-              <div className="text-xs whitespace-pre-wrap" style={{ color: arg.event.textColor }}>
-                {arg.event.title}
-              </div>
-            )}
+            slotLabelClassNames={() => ['!border-0']}
+            slotLaneClassNames={() => ['!border-0']}
+            allDaySlot={false}
+            scrollTime="08:00:00"
+            eventContent={(arg) => {
+              const viewType = calendarRef.current?.getApi().view.type;
+              const isTimeGrid = viewType === 'timeGridDay' || viewType === 'timeGridWeek';
+              return (
+                <div
+                  className={`text-xs whitespace-pre-wrap px-1 py-0.5 rounded ${isTimeGrid ? 'h-full' : ''}`}
+                  style={{
+                    backgroundColor: arg.event.backgroundColor,
+                    color: arg.event.textColor,
+                    height: isTimeGrid ? '100%' : 'auto'
+                  }}
+                >
+                  {arg.event.title}
+                </div>
+              );
+            }}
             dayCellClassNames={(arg) => {
               const today = new Date();
               today.setHours(0, 0, 0, 0);
@@ -150,12 +173,6 @@ export default function CalendarView() {
                 classes.push('bg-gray-300', 'dark:bg-gray-600', '!text-white');
               }
               return classes;
-            }}
-            datesSet={(arg) => {
-              if (calendarRef.current) {
-                const calendarApi = calendarRef.current.getApi();
-                scrollToFirstEvent(calendarApi);
-              }
             }}
           />
         </div>
@@ -174,9 +191,7 @@ export default function CalendarView() {
                     : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-white'
                 }`}
               >
-                {`${new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()} - ${new Date(
-                  schedule.end_date + 'T00:00:00'
-                ).toLocaleDateString()}`}
+                {`${new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()} - ${new Date(schedule.end_date + 'T00:00:00').toLocaleDateString()}`}
               </button>
             </li>
           ))}
@@ -203,14 +218,14 @@ export default function CalendarView() {
             const start = new Date(newShift.start_time);
             const end = new Date(newShift.end_time);
             const timeStr = `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-            const fullName = `${newShift.employee_first_name || ''} ${newShift.employee_last_name || ''}`.trim() || newShift.employee_name || newShift.employee || 'Unknown';
+            const fullName = `${(newShift.employee_first_name || '')} ${(newShift.employee_last_name || '')}`.trim() || newShift.employee_name || newShift.employee || 'Unknown';
             setEvents((prev) => [...prev, {
               id: newShift.id,
               title: `${fullName}\n${timeStr}`,
               start,
               end,
-              backgroundColor: 'transparent',
-              textColor: newShift.color,
+              backgroundColor: newShift.color,
+              textColor: 'white',
               extendedProps: { shiftData: newShift },
               allDay: false
             }]);

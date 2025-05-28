@@ -1,5 +1,5 @@
 // src/components/ShiftCreateModal.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from '../utils/axios';
 
 export default function ShiftCreateModal({
@@ -13,18 +13,21 @@ export default function ShiftCreateModal({
 }) {
   const [employee, setEmployee] = useState('');
   const [startHourMinute, setStartHourMinute] = useState('');
-  const [startPeriod, setStartPeriod] = useState('AM');
   const [endHourMinute, setEndHourMinute] = useState('');
+  const [startPeriod, setStartPeriod] = useState('AM');
   const [endPeriod, setEndPeriod] = useState('PM');
   const [role, setRole] = useState('');
   const [notes, setNotes] = useState('');
+
+  const startInputRef = useRef();
+  const endInputRef = useRef();
 
   useEffect(() => {
     if (!isOpen) {
       setEmployee('');
       setStartHourMinute('');
-      setStartPeriod('AM');
       setEndHourMinute('');
+      setStartPeriod('AM');
       setEndPeriod('PM');
       setRole('');
       setNotes('');
@@ -34,12 +37,33 @@ export default function ShiftCreateModal({
   const handleEmployeeChange = (e) => {
     const employeeId = e.target.value;
     setEmployee(employeeId);
-
     const selected = members.find((m) => m.id === parseInt(employeeId));
     if (selected) {
       setRole(selected.role || '');
     }
   };
+
+  function formatTimeCustom(raw) {
+    const cleaned = raw.replace(/\D/g, '').slice(0, 4);
+    if (!cleaned) return '';
+
+    const first = cleaned[0];
+
+    if (first === '1') {
+      if (cleaned.length === 1) return '1';
+      if (['0', '1', '2'].includes(cleaned[1])) {
+        if (cleaned.length === 2) return cleaned;
+        if (cleaned.length === 3) return `${cleaned.slice(0, 2)}:${cleaned[2]}`;
+        return `${cleaned.slice(0, 2)}:${cleaned.slice(2, 4)}`;
+      } else {
+        return `${first}:${cleaned.slice(1, 3)}`;
+      }
+    } else {
+      if (cleaned.length === 1) return `${first}`;
+      if (cleaned.length === 2) return `${first}:${cleaned[1]}`;
+      return `${first}:${cleaned.slice(1, 3)}`;
+    }
+  }
 
   function convertTo24Hour(time, period) {
     let [hours, minutes] = time.split(':').map(Number);
@@ -108,7 +132,7 @@ export default function ShiftCreateModal({
                   placeholder="hh:mm"
                   className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
                   value={startHourMinute}
-                  onChange={(e) => setStartHourMinute(e.target.value)}
+                  onChange={(e) => setStartHourMinute(formatTimeCustom(e.target.value))}
                   required
                 />
                 <select
@@ -129,7 +153,7 @@ export default function ShiftCreateModal({
                   placeholder="hh:mm"
                   className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
                   value={endHourMinute}
-                  onChange={(e) => setEndHourMinute(e.target.value)}
+                  onChange={(e) => setEndHourMinute(formatTimeCustom(e.target.value))}
                   required
                 />
                 <select

@@ -96,20 +96,17 @@ class ScheduleCreateView(generics.CreateAPIView):
 
         calendar = get_object_or_404(Calendar, id=calendar_id)
 
-        # Create the schedule
         schedule = serializer.save(
             created_by=self.request.user,
             calendar=calendar
         )
 
-        # Add creator as admin
         ScheduleMembership.objects.create(
             user=self.request.user,
             schedule=schedule,
             role='admin'
         )
 
-        # Add all other calendar members as viewers
         members = CalendarMembership.objects.filter(calendar=calendar).exclude(user=self.request.user)
         for member in members:
             ScheduleMembership.objects.get_or_create(
@@ -117,6 +114,14 @@ class ScheduleCreateView(generics.CreateAPIView):
                 schedule=schedule,
                 role='viewer'
             )
+
+        self.created_schedule = schedule
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        full_data = ScheduleListSerializer(self.created_schedule, context={'request': request}).data
+        return Response(full_data, status=status.HTTP_201_CREATED)
+
 
 
 class ScheduleListView(generics.ListAPIView):

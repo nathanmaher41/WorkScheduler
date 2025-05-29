@@ -1,31 +1,35 @@
-// src/components/ScheduleCreateModal.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from '../utils/axios';
 
-export default function ScheduleCreateModal({ isOpen, onClose, onCreate, calendarId }) {
+export default function ScheduleCreateModal({
+  isOpen,
+  onClose,
+  onCreate,
+  calendarId
+}) {
+  const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
-  const getFormattedName = () => {
-    const format = (dateStr) =>
-      new Date(dateStr).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-      });
-    return `${format(startDate)} - ${format(endDate)} Schedule`;
-  };
+  useEffect(() => {
+    if (!isOpen) {
+      setName('');
+      setStartDate('');
+      setEndDate('');
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const name = getFormattedName();
       const res = await axios.post('/api/schedules/create/', {
+        calendar_id: calendarId,
         name,
         start_date: startDate,
-        end_date: endDate,
-        calendar_id: calendarId,
+        end_date: endDate
       });
       onCreate(res.data);
+      console.log(res.data)
       onClose();
     } catch (err) {
       console.error('Failed to create schedule', err);
@@ -40,6 +44,18 @@ export default function ScheduleCreateModal({ isOpen, onClose, onCreate, calenda
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
         <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Create Schedule</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Schedule Name (optional)
+            </label>
+            <input
+              type="text"
+              className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. June Schedule"
+            />
+          </div>
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
               Start Date
@@ -76,7 +92,7 @@ export default function ScheduleCreateModal({ isOpen, onClose, onCreate, calenda
               type="submit"
               className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
             >
-              Create
+              Save
             </button>
           </div>
         </form>

@@ -27,6 +27,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 class ScheduleCreateSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(allow_blank=True, required=False)
     class Meta:
         model = Schedule
         fields = ['name', 'start_date', 'end_date']

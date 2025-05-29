@@ -21,35 +21,48 @@ export default function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCalendarAdmin, setIsCalendarAdmin] = useState(false);
   const calendarRef = useRef();
+  const [shiftFilter, setShiftFilter] = useState('all'); // 'all', 'mine', 'selected', 'daysIWork', 'daysIDontWork'
+  const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+
 
   useEffect(() => {
     const fetchShifts = async () => {
       if (!activeSchedule) return;
       try {
         const res = await axios.get(`/api/schedules/${activeSchedule.id}/shifts/`);
-        const formatted = res.data.map((shift) => {
-          const start = new Date(shift.start_time);
-          const end = new Date(shift.end_time);
-          const timeStr = `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-          const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
-          return {
-            id: shift.id,
-            title: `${fullName}\n${timeStr}`,
-            start,
-            end,
-            backgroundColor: shift.color || '#8b5cf6',
-            textColor: 'white',
-            extendedProps: { shiftData: shift },
-            allDay: false
-          };
-        });
+        const currentUserRes = await axios.get('/api/user/');
+        const currentUserId = currentUserRes.data.id;
+
+        const formatted = res.data
+          .filter((shift) => {
+            if (shiftFilter === 'mine') return shift.employee === currentUserId;
+            if (shiftFilter === 'selected') return selectedMemberIds.includes(shift.employee);
+            return true; // 'all' and default
+          })
+          .map((shift) => {
+            const start = new Date(shift.start_time);
+            const end = new Date(shift.end_time);
+            const timeStr = `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+            const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
+            return {
+              id: shift.id,
+              title: `${fullName}\n${timeStr}`,
+              start,
+              end,
+              backgroundColor: shift.color || '#8b5cf6',
+              textColor: 'white',
+              extendedProps: { shiftData: shift },
+              allDay: false
+            };
+          });
+
         setEvents(formatted);
       } catch (err) {
         console.error('Error loading shifts', err);
       }
     };
     fetchShifts();
-  }, [activeSchedule]);
+  }, [activeSchedule, shiftFilter, selectedMemberIds]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -178,24 +191,80 @@ export default function CalendarView() {
         </div>
       </div>
 
-      <div className="w-64 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-        <h2 className="text-lg font-bold mb-4">Schedules</h2>
-        <ul className="space-y-2">
-          {schedules.map(schedule => (
-            <li key={schedule.id}>
-              <button
-                onClick={() => handleScheduleSelect(schedule)}
-                className={`w-full text-left px-3 py-2 rounded ${
-                  activeSchedule?.id === schedule.id
-                    ? 'bg-purple-500 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-white'
-                }`}
-              >
-                {`${new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()} - ${new Date(schedule.end_date + 'T00:00:00').toLocaleDateString()}`}
-              </button>
-            </li>
-          ))}
-        </ul>
+      <div
+        className="w-64 bg-white dark:bg-gray-800 rounded-lg shadow p-4"
+        style={{ height: '700px', display: 'flex', flexDirection: 'column' }}
+      >
+        <div className="mb-4">
+          <h2 className="text-lg font-bold mb-2">Shift Filters</h2>
+          <select
+            className="w-full px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+            value={shiftFilter}
+            onChange={(e) => setShiftFilter(e.target.value)}
+          >
+            <option value="all">All Shifts</option>
+            <option value="mine">Only My Shifts</option>
+            <option value="selected">Only Selected Members</option>
+          </select>
+
+          {shiftFilter === 'selected' && (
+            <div className="mt-2">
+              {members.map((member) => (
+                <label key={member.id} className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedMemberIds.includes(member.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedMemberIds((prev) => [...prev, member.id]);
+                      } else {
+                        setSelectedMemberIds((prev) => prev.filter((id) => id !== member.id));
+                      }
+                    }}
+                  />
+                  <span className="text-black dark:text-white">{member.full_name || 'null'}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Scrollable schedules */}
+        <div className="flex-1 overflow-y-auto">
+          <h2 className="text-lg font-bold mb-4">Schedules</h2>
+          <ul className="space-y-2">
+            {schedules.map((schedule) => (
+              <li key={schedule.id}>
+                <button
+                  onClick={() => handleScheduleSelect(schedule)}
+                  className={`w-full text-left px-3 py-2 rounded ${
+                    activeSchedule?.id === schedule.id
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-white'
+                  }`}
+                >
+                  <div className="flex flex-col items-start">
+                    {schedule.name ? (
+                      <>
+                        <div className="font-semibold">{schedule.name}</div>
+                        <div>
+                          {new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()} -{' '}
+                          {new Date(schedule.end_date + 'T00:00:00').toLocaleDateString()}
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        {new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()} -{' '}
+                        {new Date(schedule.end_date + 'T00:00:00').toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         {isCalendarAdmin && (
           <button
             className="mt-4 w-full bg-purple-500 dark:bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-500"
@@ -205,6 +274,7 @@ export default function CalendarView() {
           </button>
         )}
       </div>
+
 
       {showShiftModal && (
         <ShiftCreateModal
@@ -239,6 +309,7 @@ export default function CalendarView() {
           isOpen={showScheduleModal}
           onClose={() => setShowScheduleModal(false)}
           onCreate={(schedule) => {
+            setActiveSchedule(schedule);
             setSchedules(prev => [...prev, schedule]);
             setActiveSchedule(schedule);
             const newDate = new Date(schedule.start_date + 'T00:00:00');

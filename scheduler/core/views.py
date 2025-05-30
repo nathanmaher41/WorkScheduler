@@ -4,7 +4,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, Calendar, CalendarMembership, CalendarRole
+from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, Calendar, CalendarMembership, CalendarRole, ShiftSwapRequest
 from .permissions import IsScheduleAdmin
 from .serializers import (
     RegisterSerializer,
@@ -22,6 +22,7 @@ from .serializers import (
     CalendarRoleSerializer,
     CalendarJoinSerializer,
     CalendarMembershipSimpleSerializer,
+    ShiftSwapRequestSerializer,
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -121,7 +122,6 @@ class ScheduleCreateView(generics.CreateAPIView):
         response = super().post(request, *args, **kwargs)
         full_data = ScheduleListSerializer(self.created_schedule, context={'request': request}).data
         return Response(full_data, status=status.HTTP_201_CREATED)
-
 
 
 class ScheduleListView(generics.ListAPIView):
@@ -229,29 +229,29 @@ class ShiftSwapRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        shift_a_id = request.data.get('requesting_shift_id')
-        shift_b_id = request.data.get('target_shift_id')
+        requesting_shift_id = request.data.get('requesting_shift_id')
+        target_shift_id = request.data.get('target_shift_id')
+
+        if not requesting_shift_id or not target_shift_id:
+            return Response({"error": "Missing shift IDs."}, status=400)
 
         try:
-            shift_a = Shift.objects.get(id=shift_a_id)
-            shift_b = Shift.objects.get(id=shift_b_id)
+            requesting_shift = Shift.objects.get(id=requesting_shift_id, employee=request.user)
+            target_shift = Shift.objects.get(id=target_shift_id)
         except Shift.DoesNotExist:
-            return Response({"error": "One or both shifts not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Invalid shift(s) or unauthorized."}, status=404)
 
-        if shift_a.employee != request.user:
-            return Response({"error": "You can only request swaps for your own shifts."}, status=status.HTTP_403_FORBIDDEN)
+        if requesting_shift.schedule != target_shift.schedule:
+            return Response({"error": "Shifts must be in the same schedule."}, status=400)
 
-        if shift_a.schedule != shift_b.schedule:
-            return Response({"error": "Shifts must belong to the same schedule."}, status=status.HTTP_400_BAD_REQUEST)
+        # Create new swap request
+        ShiftSwapRequest.objects.create(
+            requesting_shift=requesting_shift,
+            target_shift=target_shift,
+            requested_by=request.user
+        )
 
-        schedule = shift_a.schedule
-
-        shift_a.is_swap_pending = True
-        shift_a.swap_requested_by = request.user
-        shift_a.swap_approved_by = None
-        shift_a.save()
-
-        return Response({"message": "Swap request sent.", "requires_admin_approval": schedule.require_admin_swap_approval})
+        return Response({"message": "Swap request submitted."})
 
 class ShiftSwapApproveView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -631,4 +631,17 @@ class CalendarLookupByCodeView(APIView):
         data['already_joined'] = already_joined
         return Response(data)
 
-        
+class ShiftSwapRequestListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # Requests sent by the current user
+        sent_requests = ShiftSwapRequest.objects.filter(requested_by=request.user)
+
+        # Requests targeting the current user's shifts
+        received_requests = ShiftSwapRequest.objects.filter(target_shift__employee=request.user)
+
+        combined = sent_requests.union(received_requests)
+
+        serializer = ShiftSwapRequestSerializer(combined, many=True)
+        return Response(serializer.data)

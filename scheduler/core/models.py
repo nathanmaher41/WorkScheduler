@@ -110,4 +110,16 @@ class CalendarMembership(models.Model):
 
     class Meta:
         unique_together = ('user', 'calendar')
+    
+class ShiftSwapRequest(models.Model):
+    requesting_shift = models.ForeignKey(Shift, related_name='swap_requests_sent', on_delete=models.CASCADE)
+    target_shift = models.ForeignKey(Shift, related_name='swap_requests_received', on_delete=models.CASCADE)
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_by_target = models.BooleanField(default=False)
+    approved_by_admin = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.requested_by.username} requests {self.target_shift} in exchange for {self.requesting_shift}"
+
 

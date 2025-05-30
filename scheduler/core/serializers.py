@@ -1,9 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, CalendarMembership, Calendar, CalendarRole
-
-
+from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, CalendarMembership, Calendar, CalendarRole, ShiftSwapRequest
 
 
 User = get_user_model()
@@ -184,8 +182,6 @@ class CalendarMembershipSerializer(serializers.ModelSerializer):
             return obj.title.name.upper()
         return "None"
 
-
-
 class CalendarRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = CalendarRole
@@ -232,3 +228,40 @@ class CalendarMembershipSimpleSerializer(serializers.ModelSerializer):
 
     def get_is_admin(self, obj):
         return obj.is_admin
+
+# serializers.py
+
+class ShiftSwapRequestSerializer(serializers.ModelSerializer):
+    requesting_employee = serializers.CharField(source='requesting_shift.employee.username', read_only=True)
+    target_employee = serializers.CharField(source='target_shift.employee.username', read_only=True)
+    requesting_shift_time = serializers.SerializerMethodField()
+    target_shift_time = serializers.SerializerMethodField()
+    position = serializers.CharField(source='requesting_shift.position', read_only=True)
+
+    class Meta:
+        model = ShiftSwapRequest
+        fields = [
+            'id',
+            'requesting_shift_id',
+            'target_shift_id',
+            'requesting_employee',
+            'target_employee',
+            'requesting_shift_time',
+            'target_shift_time',
+            'position',
+        ]
+
+    def get_requesting_shift_time(self, obj):
+        return {
+            'start': obj.requesting_shift.start_time,
+            'end': obj.requesting_shift.end_time,
+        }
+
+    def get_target_shift_time(self, obj):
+        return {
+            'start': obj.target_shift.start_time,
+            'end': obj.target_shift.end_time,
+        }
+
+
+

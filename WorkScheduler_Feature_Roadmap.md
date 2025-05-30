@@ -20,16 +20,16 @@
 - [x] Color-code shifts by user’s calendar color
 
 ### 🗂️ Sorting & Filtering
-- [ ] Sort members by:
-  - [ ] Alphabetical
-  - [ ] Role
-- [ ] Filter calendar view by:
-  - [ ] Selected employee
-  - [ ] "My shifts only"
+- [x] Sort members by:
+  - [x] Alphabetical
+  - [x] Role
+- [x] Filter calendar view by:
+  - [x] Selected employee
+  - [x] "My shifts only"
 
 ### 📅 View Experience
-- [ ] Improve week & day views
-- [ ] Highlight current day more clearly
+- [x] Improve week & day views
+- [x] Highlight current day more clearly
 - [ ] Show empty days as visually distinct
 - [ ] Add hover or click tooltips on shifts
 
@@ -42,6 +42,9 @@
   - [ ] Assign permissions by role group
 - [ ] Prevent shift creation on closed days
 - [ ] Add workplace-wide holidays
+- [ ] Request days off on main calendar
+- [ ] Ask for a shift without swapping 
+  - [ ] Admin approval required so not too many hours
 
 ---
 
@@ -76,5 +79,8 @@
 ## 🧼 Quality-of-Life / UX
 - [ ] Better error handling + toasts
 - [ ] Show loading states when fetching
-- [ ] Date/time bugs around timezones fully resolved
+- [x] Date/time bugs around timezones fully resolved
 - [ ] Consistent visual styling across views
+- [ ] Middle Name showing as well as pronouns
+- [x] Highlight admins in dashboard
+

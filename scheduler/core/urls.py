@@ -29,6 +29,7 @@ from .views import (
     CalendarMemberListView,
     CalendarDetailView,
     CalendarLookupByCodeView,
+    ShiftSwapRequestListView,
 )
 
 
@@ -65,8 +66,7 @@ urlpatterns = [
     path('calendars/<int:pk>/', CalendarDetailView.as_view(), name='calendar-detail'),
     path('calendars/lookup/', CalendarLookupByCodeView.as_view(), name='calendar-lookup'),
     path('user/', UserProfileUpdateView.as_view(), name='user-profile'),
-
-
+    path('shifts/swap/requests/', ShiftSwapRequestListView.as_view(), name='shift-swap-requests'),
 
 
 ]

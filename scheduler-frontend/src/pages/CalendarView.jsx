@@ -8,6 +8,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import axios from '../utils/axios';
 import ShiftCreateModal from '../components/ShiftCreateModal';
 import ScheduleCreateModal from '../components/ScheduleCreateModal';
+import ShiftSwapModal from '../components/ShiftSwapModal';
 
 export default function CalendarView() {
   const { id } = useParams();
@@ -23,39 +24,83 @@ export default function CalendarView() {
   const calendarRef = useRef();
   const [shiftFilter, setShiftFilter] = useState('all'); // 'all', 'mine', 'selected', 'daysIWork', 'daysIDontWork'
   const [selectedMemberIds, setSelectedMemberIds] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [selectedShift, setSelectedShift] = useState(null);
+
 
 
   useEffect(() => {
     const fetchShifts = async () => {
       if (!activeSchedule) return;
       try {
-        const res = await axios.get(`/api/schedules/${activeSchedule.id}/shifts/`);
-        const currentUserRes = await axios.get('/api/user/');
-        const currentUserId = currentUserRes.data.id;
+        const [shiftsRes, currentUserRes] = await Promise.all([
+          axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
+          axios.get('/api/user/')
+        ]);
 
-        const formatted = res.data
-          .filter((shift) => {
-            if (shiftFilter === 'mine') return shift.employee === currentUserId;
-            if (shiftFilter === 'selected') return selectedMemberIds.includes(shift.employee);
-            return true; // 'all' and default
-          })
-          .map((shift) => {
-            const start = new Date(shift.start_time);
-            const end = new Date(shift.end_time);
-            const timeStr = `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-            const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
-            return {
-              id: shift.id,
-              title: `${fullName}\n${timeStr}`,
-              start,
-              end,
-              backgroundColor: shift.color || '#8b5cf6',
-              textColor: 'white',
-              extendedProps: { shiftData: shift },
-              allDay: false
-            };
-          });
+        const userId = currentUserRes.data.id;
+        setCurrentUserId(userId);
 
+        const shifts = shiftsRes.data.map((shift) => {
+          const date = new Date(shift.start_time);
+          const shiftDate = date.toISOString().split('T')[0];
+          return {
+            ...shift,
+            shiftDate
+          };
+        });
+
+        const userShiftDates = new Set(
+          shifts.filter(s => s.employee === userId).map(s => s.shiftDate)
+        );
+
+        const filtered = shifts.filter((shift) => {
+          const { shiftDate } = shift;
+          const include =
+            shiftFilter === 'mine' ? shift.employee === userId :
+            shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
+            shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
+            shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
+            true;
+          if (!include) {
+            console.log('Filtered OUT:', shift);
+          }
+          return include;
+        });
+
+        const formatted = filtered.map((shift) => {
+          const start = new Date(shift.start_time);
+          const end = new Date(shift.end_time);
+
+          const formatTime = (time) => {
+            const hours = time.getHours();
+            const minutes = time.getMinutes();
+            return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
+          };
+
+          const viewType = calendarRef.current?.getApi().view.type;
+          const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
+          const startStr = formatTime(start);
+          const endStr = formatTime(end);
+          const timeStr = showAMPM
+            ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+            : `${startStr} - ${endStr}`;
+
+          const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
+          return {
+            id: shift.id,
+            title: `${fullName}\n${timeStr}`,
+            start,
+            end,
+            backgroundColor: shift.color || '#8b5cf6',
+            textColor: 'white',
+            extendedProps: { shiftData: shift },
+            allDay: false
+          };
+        });
+
+        console.log('Filtered Shifts to Display:', formatted);
         setEvents(formatted);
       } catch (err) {
         console.error('Error loading shifts', err);
@@ -131,6 +176,13 @@ export default function CalendarView() {
     return `${String(clamped).padStart(2, '0')}:00:00`;
   }
 
+  const handleEventClick = (info) => {
+    //console.log("Event clicked!", info);
+    const shift = info.event.extendedProps.shiftData;
+    setSelectedShift(shift);
+    setShowSwapModal(true);
+  };
+
   return (
     <div className="flex p-6 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <div className="flex-1 mr-6">
@@ -157,19 +209,34 @@ export default function CalendarView() {
             slotLaneClassNames={() => ['!border-0']}
             allDaySlot={false}
             scrollTime="08:00:00"
+            eventClick={handleEventClick}
             eventContent={(arg) => {
               const viewType = calendarRef.current?.getApi().view.type;
               const isTimeGrid = viewType === 'timeGridDay' || viewType === 'timeGridWeek';
+
+              const [firstLine, secondLine] = arg.event.title.split('\n');
+              const compactName = isTimeGrid
+                ? firstLine.split(' ').map(n => n[0]).join('')  // e.g., "Bob Bob" -> "BB"
+                : firstLine;
+
               return (
                 <div
-                  className={`text-xs whitespace-pre-wrap px-1 py-0.5 rounded ${isTimeGrid ? 'h-full' : ''}`}
+                  className={`text-xs px-1 py-0.5 rounded leading-tight overflow-hidden ${
+                    isTimeGrid ? 'h-full' : ''
+                  }`}
                   style={{
                     backgroundColor: arg.event.backgroundColor,
                     color: arg.event.textColor,
-                    height: isTimeGrid ? '100%' : 'auto'
+                    height: isTimeGrid ? '100%' : 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    whiteSpace: 'nowrap',
+                    textOverflow: 'ellipsis'
                   }}
                 >
-                  {arg.event.title}
+                  <div className="truncate font-semibold">{compactName}</div>
+                  <div className="truncate">{secondLine}</div>
                 </div>
               );
             }}
@@ -188,6 +255,15 @@ export default function CalendarView() {
               return classes;
             }}
           />
+          {showSwapModal && selectedShift && (
+            <ShiftSwapModal
+              isOpen={showSwapModal}
+              onClose={() => setShowSwapModal(false)}
+              shift={selectedShift}
+              currentUserId={currentUserId}
+              members={members}
+            />
+          )}
         </div>
       </div>
 
@@ -205,6 +281,9 @@ export default function CalendarView() {
             <option value="all">All Shifts</option>
             <option value="mine">Only My Shifts</option>
             <option value="selected">Only Selected Members</option>
+            <option value="daysIWork">Only Days I Work</option>
+            <option value="daysIDontWork">Only Days I'm Off</option>
+
           </select>
 
           {shiftFilter === 'selected' && (
@@ -228,10 +307,22 @@ export default function CalendarView() {
             </div>
           )}
         </div>
-
+        
         {/* Scrollable schedules */}
+        <div className="mb-4">
+          <h2 className="text-lg font-bold mb-2">Schedules</h2>
+          {isCalendarAdmin && (
+            <button
+              className="w-full bg-purple-500 dark:bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-500"
+              onClick={() => setShowScheduleModal(true)}
+            >
+              + Create Schedule
+            </button>
+          )}
+        </div>
+
+        {/* Scrollable list of schedules */}
         <div className="flex-1 overflow-y-auto">
-          <h2 className="text-lg font-bold mb-4">Schedules</h2>
           <ul className="space-y-2">
             {schedules.map((schedule) => (
               <li key={schedule.id}>
@@ -275,6 +366,16 @@ export default function CalendarView() {
         )}
       </div>
 
+      {showShiftModal && (
+        <ShiftCreateModal
+          isOpen={showShiftModal}
+          onClose={() => setShowShiftModal(false)}
+          calendarId={id}
+          scheduleId={activeSchedule?.id}
+          selectedDate={selectedDate}
+          members={members}
+        />
+      )}
 
       {showShiftModal && (
         <ShiftCreateModal

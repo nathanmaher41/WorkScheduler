@@ -30,6 +30,7 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
       try {
         const res = await axios.get('/api/shifts/take/requests/');
         setPendingTakes(res.data);
+        console.log('All pending take requests:', res.data);
         console.log(res.data)
       } catch (err) {
         console.error('Error fetching pending takes:', err);
@@ -90,10 +91,12 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
       };
       await axios.post('/api/shifts/take/request/', payload);
       setSuccessMessage('Take request sent successfully.');
+      await fetchPendingTakes();  // 👈 refresh the list right away
     } catch (err) {
       console.error('Take request failed:', err);
     }
   };
+
 
   const handleApprove = async (swapId) => {
     try {
@@ -145,9 +148,36 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     req.target_shift_id === shift.id || req.requesting_shift_id === shift.id
   );
 
-  const allRelevantTakes = pendingTakes.filter(req =>
-    req.shift === shift.id || (req.direction === 'give' && req.requested_to_id === currentUserId)
+  pendingTakes.forEach(req => {
+  if (Number(req.shift) === Number(shift.id)) {
+    console.log('Potential match:', {
+      req_id: req.id,
+      shift_id: req.shift,
+      requested_by_id: req.requested_by_id,
+      requested_to_id: req.requested_to_id,
+      shift_employee: shift.employee,
+      currentUserId,
+    });
+  }
+});
+
+ const allRelevantTakes = pendingTakes.filter(req =>
+    Number(req.shift) === Number(shift.id) &&
+    (
+      Number(req.requested_by_id) === Number(currentUserId) ||
+      Number(req.requested_to_id) === Number(currentUserId) ||
+      Number(shift.employee) === Number(currentUserId)
+    )
   );
+
+
+
+  console.log("pendingTakes", pendingTakes);
+  console.log("currentUserId", currentUserId);
+  console.log("shift.id", shift.id);
+  console.log("allRelevantTakes", allRelevantTakes);
+
+
 
 
 
@@ -286,58 +316,41 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
               {allRelevantTakes.length > 0 ? (
                 <ul className="text-sm space-y-2">
                   {enrichedTakes.map((req) => {
-                    const isIncoming = isOwnShift && req.direction === 'take'; // someone wants to take your shift
-                    const isOutgoing = !isOwnShift && req.direction === 'take' && req.requester_id === currentUserId; // you want to take someone else's shift
-                    const isGiveRequest = req.direction === 'give' && req.requested_to_id === currentUserId && req.shift === shift.id;
+                    let content = null;
 
-                    const isRequestedByYou = req.requested_by_id === currentUserId;
+                    if (req.isIncomingTake) {
+                      content = (
+                        <>
+                          <div>Incoming take request from {req.requester}</div>
+                          <div className="flex gap-3">
+                            <button onClick={() => handleApproveTake(req.id)} className="text-green-600 hover:underline">Approve</button>
+                            <button onClick={() => handleRejectTake(req.id)} className="text-red-600 hover:underline">Reject</button>
+                          </div>
+                        </>
+                      );
+                    } else if (req.isIncomingGive) {
+                      content = (
+                        <>
+                          <div>Incoming give request from {req.requester} — asking you to take their shift</div>
+                          <div className="flex gap-3">
+                            <button onClick={() => handleApproveTake(req.id)} className="text-green-600 hover:underline">Approve</button>
+                            <button onClick={() => handleRejectTake(req.id)} className="text-red-600 hover:underline">Reject</button>
+                          </div>
+                        </>
+                      );
+                    } else if (req.isOutgoingTake) {
+                      content = (
+                        <div>Pending request to take this shift from {req.shift_owner}</div>
+                      );
+                    } else if (req.isOutgoingGive) {
+                      content = (
+                        <div>Pending request asking {req.shift_owner} to take this shift</div>
+                      );
+                    }
 
                     return (
                       <li key={req.id} className="flex flex-col gap-1">
-                        {/* {isIncoming && !isGiveRequest && (
-                          <>
-                            <div>Incoming take request from {req.requester}</div>
-                            <div className="flex gap-3">
-                              <button onClick={() => handleApproveTake(req.id)} className="text-green-600 hover:underline">Approve</button>
-                              <button onClick={() => handleRejectTake(req.id)} className="text-red-600 hover:underline">Reject</button>
-                            </div>
-                          </>
-                        )} */}
-                        {req.isIncomingTake && (
-                          <>
-                            <div>Incoming take request from {req.requester}</div>
-                            <div className="flex gap-3">
-                              <button onClick={() => handleApproveTake(req.id)} className="text-green-600 hover:underline">Approve</button>
-                              <button onClick={() => handleRejectTake(req.id)} className="text-red-600 hover:underline">Reject</button>
-                            </div>
-                          </>
-                        )}
-
-                        {req.isIncomingGive && (
-                          <>
-                            <div>Incoming give request from {req.requester} — asking you to take their shift</div>
-                            <div className="flex gap-3">
-                              <button onClick={() => handleApproveTake(req.id)} className="text-green-600 hover:underline">Approve</button>
-                              <button onClick={() => handleRejectTake(req.id)} className="text-red-600 hover:underline">Reject</button>
-                            </div>
-                          </>
-                        )}
-
-                        {req.isOutgoingTake && (
-                          <div>Pending request to take this shift from {req.shift_owner}</div>
-                        )}
-
-                        {req.isOutgoingGive && (
-                          <div>Pending request asking {req.shift_owner} to take this shift</div>
-                        )}
-
-                        {isOutgoing && (
-                          <div>Pending request to take this shift from {req.shift_owner}</div>
-                        )}
-
-                        {req.direction === 'give' && isRequestedByYou && (
-                          <div>Pending request asking {req.shift_owner} to take this shift</div>
-                        )}
+                        {content}
                       </li>
                     );
                   })}

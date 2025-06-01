@@ -763,15 +763,21 @@ class ShiftTakeAcceptView(APIView):
 
     def post(self, request, take_id):
         try:
-            take = ShiftTakeRequest.objects.get(id=take_id)
+            take = ShiftTakeRequest.objects.select_related("shift").get(id=take_id)
         except ShiftTakeRequest.DoesNotExist:
             return Response({"error": "Request not found."}, status=404)
 
         if take.requested_to != request.user:
             return Response({"error": "You are not the recipient."}, status=403)
 
+        # Determine direction
+        direction = "give" if take.requested_by == take.shift.employee else "take"
+
         with transaction.atomic():
-            take.shift.employee = take.requested_by
+            if direction == "take":
+                take.shift.employee = take.requested_by
+            else:  # direction == "give"
+                take.shift.employee = take.requested_to
             take.shift.save()
             take.delete()
 
@@ -803,8 +809,11 @@ class ShiftTakeRequestListView(APIView):
         qs = ShiftTakeRequest.objects.filter(
             shift__schedule_id__in=schedule_ids
         ).filter(
-            models.Q(requested_by=request.user) | models.Q(shift__employee=request.user)
-        ).select_related("shift", "requested_by", "requested_to")
+            models.Q(requested_by=request.user) |
+            models.Q(shift__employee=request.user) |
+            models.Q(requested_to=request.user)
+        )
+
 
         serializer = ShiftTakeRequestSerializer(qs, many=True)
         return Response(serializer.data)

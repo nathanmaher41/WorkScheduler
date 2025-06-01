@@ -30,6 +30,13 @@ from .views import (
     CalendarDetailView,
     CalendarLookupByCodeView,
     ShiftSwapRequestListView,
+    ShiftSwapAcceptView,
+    ShiftSwapRejectView,
+    ShiftTakeRequestView,
+    ShiftTakeAcceptView,
+    ShiftTakeRejectView,
+    ShiftTakeRequestListView,
+
 )
 
 
@@ -67,6 +74,12 @@ urlpatterns = [
     path('calendars/lookup/', CalendarLookupByCodeView.as_view(), name='calendar-lookup'),
     path('user/', UserProfileUpdateView.as_view(), name='user-profile'),
     path('shifts/swap/requests/', ShiftSwapRequestListView.as_view(), name='shift-swap-requests'),
+    path('shifts/swap/<int:swap_id>/accept/', ShiftSwapAcceptView.as_view(), name='shift-swap-accept'),
+    path('shifts/swap/<int:swap_id>/reject/', ShiftSwapRejectView.as_view(), name='shift-swap-reject'),
+    path('shifts/take/request/', ShiftTakeRequestView.as_view(), name='shift-take-request'),
+    path('shifts/take/<int:take_id>/accept/', ShiftTakeAcceptView.as_view(), name='shift-take-accept'),
+    path('shifts/take/<int:take_id>/reject/', ShiftTakeRejectView.as_view(), name='shift-take-reject'),
+    path("shifts/take/requests/", ShiftTakeRequestListView.as_view()),
 
 
 ]

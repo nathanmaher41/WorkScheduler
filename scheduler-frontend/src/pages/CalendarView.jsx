@@ -31,83 +31,158 @@ export default function CalendarView() {
 
 
   useEffect(() => {
-    const fetchShifts = async () => {
-      if (!activeSchedule) return;
-      try {
-        const [shiftsRes, currentUserRes] = await Promise.all([
-          axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
-          axios.get('/api/user/')
-        ]);
+    // const fetchShifts = async () => {
+    //   if (!activeSchedule) return;
+    //   try {
+    //     const [shiftsRes, currentUserRes] = await Promise.all([
+    //       axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
+    //       axios.get('/api/user/')
+    //     ]);
 
-        const userId = currentUserRes.data.id;
-        setCurrentUserId(userId);
+    //     const userId = currentUserRes.data.id;
+    //     setCurrentUserId(userId);
 
-        const shifts = shiftsRes.data.map((shift) => {
-          const date = new Date(shift.start_time);
-          const shiftDate = date.toISOString().split('T')[0];
-          return {
-            ...shift,
-            shiftDate
-          };
-        });
+        
 
-        const userShiftDates = new Set(
-          shifts.filter(s => s.employee === userId).map(s => s.shiftDate)
-        );
+    //     const shifts = shiftsRes.data.map((shift) => {
+    //       const date = new Date(shift.start_time);
+    //       const shiftDate = date.toISOString().split('T')[0];
+    //       return {
+    //         ...shift,
+    //         shiftDate
+    //       };
+    //     });
 
-        const filtered = shifts.filter((shift) => {
-          const { shiftDate } = shift;
-          const include =
-            shiftFilter === 'mine' ? shift.employee === userId :
-            shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
-            shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
-            shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
-            true;
-          if (!include) {
-            console.log('Filtered OUT:', shift);
-          }
-          return include;
-        });
+    //     const userShiftDates = new Set(
+    //       shifts.filter(s => s.employee === userId).map(s => s.shiftDate)
+    //     );
 
-        const formatted = filtered.map((shift) => {
-          const start = new Date(shift.start_time);
-          const end = new Date(shift.end_time);
+    //     const filtered = shifts.filter((shift) => {
+    //       const { shiftDate } = shift;
+    //       const include =
+    //         shiftFilter === 'mine' ? shift.employee === userId :
+    //         shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
+    //         shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
+    //         shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
+    //         true;
+    //       if (!include) {
+    //         console.log('Filtered OUT:', shift);
+    //       }
+    //       return include;
+    //     });
 
-          const formatTime = (time) => {
-            const hours = time.getHours();
-            const minutes = time.getMinutes();
-            return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
-          };
+    //     const formatted = filtered.map((shift) => {
+    //       const start = new Date(shift.start_time);
+    //       const end = new Date(shift.end_time);
 
-          const viewType = calendarRef.current?.getApi().view.type;
-          const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
-          const startStr = formatTime(start);
-          const endStr = formatTime(end);
-          const timeStr = showAMPM
-            ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-            : `${startStr} - ${endStr}`;
+    //       const formatTime = (time) => {
+    //         const hours = time.getHours();
+    //         const minutes = time.getMinutes();
+    //         return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
+    //       };
 
-          const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
-          return {
-            id: shift.id,
-            title: `${fullName}\n${timeStr}`,
-            start,
-            end,
-            backgroundColor: shift.color || '#8b5cf6',
-            textColor: 'white',
-            extendedProps: { shiftData: shift },
-            allDay: false
-          };
-        });
+    //       const viewType = calendarRef.current?.getApi().view.type;
+    //       const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
+    //       const startStr = formatTime(start);
+    //       const endStr = formatTime(end);
+    //       const timeStr = showAMPM
+    //         ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    //         : `${startStr} - ${endStr}`;
 
-        console.log('Filtered Shifts to Display:', formatted);
-        setEvents(formatted);
-      } catch (err) {
-        console.error('Error loading shifts', err);
-      }
-    };
-    fetchShifts();
+    //       const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
+    //       return {
+    //         id: shift.id,
+    //         title: `${fullName}\n${timeStr}`,
+    //         start,
+    //         end,
+    //         backgroundColor: shift.color || '#8b5cf6',
+    //         textColor: 'white',
+    //         extendedProps: { shiftData: shift },
+    //         allDay: false
+    //       };
+    //     });
+
+    //     console.log('Filtered Shifts to Display:', formatted);
+    //     setEvents(formatted);
+    //   } catch (err) {
+    //     console.error('Error loading shifts', err);
+    //   }
+    // };
+    // fetchShifts();
+    refreshShifts();
   }, [activeSchedule, shiftFilter, selectedMemberIds]);
+
+  const refreshShifts = async () => {
+  if (!activeSchedule) return;
+  try {
+    const [shiftsRes, currentUserRes] = await Promise.all([
+      axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
+      axios.get('/api/user/')
+    ]);
+
+    const userId = currentUserRes.data.id;
+    setCurrentUserId(userId);
+
+    const shifts = shiftsRes.data.map((shift) => {
+      const date = new Date(shift.start_time);
+      const shiftDate = date.toISOString().split('T')[0];
+      return {
+        ...shift,
+        shiftDate
+      };
+    });
+
+    const userShiftDates = new Set(
+      shifts.filter(s => s.employee === userId).map(s => s.shiftDate)
+    );
+
+    const filtered = shifts.filter((shift) => {
+      const { shiftDate } = shift;
+      const include =
+        shiftFilter === 'mine' ? shift.employee === userId :
+        shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
+        shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
+        shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
+        true;
+      return include;
+    });
+
+    const formatted = filtered.map((shift) => {
+      const start = new Date(shift.start_time);
+      const end = new Date(shift.end_time);
+
+      const formatTime = (time) => {
+        const hours = time.getHours();
+        const minutes = time.getMinutes();
+        return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
+      };
+
+      const viewType = calendarRef.current?.getApi().view.type;
+      const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
+      const startStr = formatTime(start);
+      const endStr = formatTime(end);
+      const timeStr = showAMPM
+        ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+        : `${startStr} - ${endStr}`;
+
+      const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
+      return {
+        id: shift.id,
+        title: `${fullName}\n${timeStr}`,
+        start,
+        end,
+        backgroundColor: shift.color || '#8b5cf6',
+        textColor: 'white',
+        extendedProps: { shiftData: shift },
+        allDay: false
+      };
+    });
+
+    setEvents(formatted);
+  } catch (err) {
+    console.error('Error refreshing shifts', err);
+  }
+};
 
   useEffect(() => {
     const fetchData = async () => {
@@ -262,6 +337,7 @@ export default function CalendarView() {
               shift={selectedShift}
               currentUserId={currentUserId}
               members={members}
+              onSwapComplete={refreshShifts}
             />
           )}
         </div>

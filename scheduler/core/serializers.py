@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, CalendarMembership, Calendar, CalendarRole, ShiftSwapRequest
+from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, CalendarMembership, Calendar, CalendarRole, ShiftSwapRequest, ShiftTakeRequest
 
 
 User = get_user_model()
@@ -232,11 +232,14 @@ class CalendarMembershipSimpleSerializer(serializers.ModelSerializer):
 # serializers.py
 
 class ShiftSwapRequestSerializer(serializers.ModelSerializer):
-    requesting_employee = serializers.CharField(source='requesting_shift.employee.username', read_only=True)
-    target_employee = serializers.CharField(source='target_shift.employee.username', read_only=True)
+    requesting_employee = serializers.SerializerMethodField()
+    target_employee = serializers.SerializerMethodField()
     requesting_shift_time = serializers.SerializerMethodField()
     target_shift_time = serializers.SerializerMethodField()
     position = serializers.CharField(source='requesting_shift.position', read_only=True)
+    requesting_employee_id = serializers.IntegerField(source='requesting_shift.employee.id', read_only=True)
+    target_employee_id = serializers.IntegerField(source='target_shift.employee.id', read_only=True)
+
 
     class Meta:
         model = ShiftSwapRequest
@@ -249,6 +252,8 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
             'requesting_shift_time',
             'target_shift_time',
             'position',
+            'requesting_employee_id',
+            'target_employee_id'
         ]
 
     def get_requesting_shift_time(self, obj):
@@ -262,6 +267,47 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
             'start': obj.target_shift.start_time,
             'end': obj.target_shift.end_time,
         }
+    def get_requesting_employee(self, obj):
+        user = obj.requesting_shift.employee
+        return f"{user.first_name} {user.last_name}".strip() or user.username
+
+    def get_target_employee(self, obj):
+        user = obj.target_shift.employee
+        return f"{user.first_name} {user.last_name}".strip() or user.username
+
+
+class ShiftTakeRequestSerializer(serializers.ModelSerializer):
+    shift_time = serializers.SerializerMethodField()
+    shift_owner = serializers.SerializerMethodField()
+    requester = serializers.SerializerMethodField()
+    direction = serializers.SerializerMethodField()
+    requested_by_id = serializers.IntegerField(source="requested_by.id")
+    requested_to_id = serializers.IntegerField(source="requested_to.id")
+
+
+    class Meta:
+        model = ShiftTakeRequest
+        fields = ['id', 'shift', 'shift_time', 'shift_owner', 'requester', 'direction', 'requested_by_id', 'requested_to_id']
+
+    def get_shift_time(self, obj):
+        return {
+            "start": obj.shift.start_time,
+            "end": obj.shift.end_time
+        }
+
+    def get_shift_owner(self, obj):
+        return f"{obj.requested_to.first_name} {obj.requested_to.last_name}".strip()
+
+    def get_requester(self, obj):
+        return f"{obj.requested_by.first_name} {obj.requested_by.last_name}".strip()
+
+    def get_direction(self, obj):
+        # If the requester is not the shift owner, they want to *take* the shift
+        return "take" if obj.requested_to == obj.shift.employee else "give"
+
+
+
+
 
 
 

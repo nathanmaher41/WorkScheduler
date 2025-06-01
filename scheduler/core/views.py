@@ -1,11 +1,23 @@
 from django.db import transaction
+from django.db import models
 from django.contrib.auth import get_user_model
 from rest_framework import generics, permissions, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, Calendar, CalendarMembership, CalendarRole, ShiftSwapRequest
 from .permissions import IsScheduleAdmin
+from rest_framework.permissions import IsAuthenticated
+from .models import (
+    Schedule, 
+    ScheduleMembership, 
+    Shift, 
+    TimeOffRequest, 
+    Calendar, 
+    CalendarMembership, 
+    CalendarRole, 
+    ShiftSwapRequest,
+    ShiftTakeRequest
+)
 from .serializers import (
     RegisterSerializer,
     ScheduleListSerializer,
@@ -23,6 +35,7 @@ from .serializers import (
     CalendarJoinSerializer,
     CalendarMembershipSimpleSerializer,
     ShiftSwapRequestSerializer,
+    ShiftTakeRequestSerializer
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -645,3 +658,156 @@ class ShiftSwapRequestListView(APIView):
 
         serializer = ShiftSwapRequestSerializer(combined, many=True)
         return Response(serializer.data)
+
+# Accept shift swap (by target shift holder)
+class ShiftSwapAcceptView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, swap_id):
+        try:
+            swap = ShiftSwapRequest.objects.select_related(
+                'requesting_shift__schedule',
+                'target_shift__schedule'
+            ).get(id=swap_id)
+
+        except ShiftSwapRequest.DoesNotExist:
+            return Response({"error": "Swap request not found."}, status=404)
+
+        if swap.target_shift.employee != request.user:
+            return Response({"error": "You are not authorized to approve this swap."}, status=403)
+
+        swap.approved_by_target = True
+        swap.save()
+
+        if not swap.target_shift.schedule.require_admin_swap_approval:
+            # Perform the swap
+            with transaction.atomic():
+                a = swap.requesting_shift
+                b = swap.target_shift
+                a_employee = a.employee
+
+                a.employee = b.employee
+                b.employee = a_employee
+
+                a.save()
+                b.save()
+
+                swap.approved_by_admin = True
+                swap.save()
+
+                # Clean up: remove all other requests involving a or b
+                ShiftSwapRequest.objects.filter(
+                    models.Q(requesting_shift=a) | models.Q(target_shift=a) |
+                    models.Q(requesting_shift=b) | models.Q(target_shift=b)
+                ).exclude(id=swap.id).delete()
+
+                swap.delete()
+
+
+        return Response({"message": "Swap approved successfully."})
+
+# Reject shift swap (by target shift holder)
+class ShiftSwapRejectView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, swap_id):
+        try:
+            swap = ShiftSwapRequest.objects.get(id=swap_id)
+        except ShiftSwapRequest.DoesNotExist:
+            return Response({"error": "Swap request not found."}, status=404)
+
+        if swap.target_shift.employee != request.user:
+            return Response({"error": "You are not authorized to reject this swap."}, status=403)
+
+        swap.delete()
+        return Response({"message": "Swap request rejected and deleted."})
+
+class ShiftTakeRequestView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        shift_id = request.data.get('shift_id')
+        direction = request.data.get('direction')  # "give" or "take"
+        target_user_id = request.data.get('user_id')  # other party
+
+        try:
+            shift = Shift.objects.get(id=shift_id)
+        except Shift.DoesNotExist:
+            return Response({"error": "Shift not found."}, status=404)
+
+        if direction == "take":
+            # current user is requesting to take this shift
+            if shift.employee.id == request.user.id:
+                return Response({"error": "You already own this shift."}, status=400)
+            ShiftTakeRequest.objects.create(
+                shift=shift,
+                requested_by=request.user,
+                requested_to=shift.employee
+            )
+        elif direction == "give":
+            if shift.employee.id != request.user.id:
+                return Response({"error": "You can't give away someone else's shift."}, status=403)
+            recipient = get_object_or_404(User, id=target_user_id)
+            ShiftTakeRequest.objects.create(
+                shift=shift,
+                requested_by=request.user,
+                requested_to=recipient
+            )
+        else:
+            return Response({"error": "Invalid direction."}, status=400)
+
+        return Response({"message": "Take request submitted."})
+
+class ShiftTakeAcceptView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, take_id):
+        try:
+            take = ShiftTakeRequest.objects.get(id=take_id)
+        except ShiftTakeRequest.DoesNotExist:
+            return Response({"error": "Request not found."}, status=404)
+
+        if take.requested_to != request.user:
+            return Response({"error": "You are not the recipient."}, status=403)
+
+        with transaction.atomic():
+            take.shift.employee = take.requested_by
+            take.shift.save()
+            take.delete()
+
+        return Response({"message": "Shift successfully taken."})
+
+class ShiftTakeRejectView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, take_id):
+        try:
+            take = ShiftTakeRequest.objects.get(id=take_id)
+        except ShiftTakeRequest.DoesNotExist:
+            return Response({"error": "Request not found."}, status=404)
+
+        if take.requested_to != request.user:
+            return Response({"error": "You are not the recipient."}, status=403)
+
+        take.delete()
+        return Response({"message": "Shift take request rejected."})
+
+class ShiftTakeRequestListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        schedule_ids = ScheduleMembership.objects.filter(
+            user=request.user
+        ).values_list('schedule_id', flat=True)
+
+        qs = ShiftTakeRequest.objects.filter(
+            shift__schedule_id__in=schedule_ids
+        ).filter(
+            models.Q(requested_by=request.user) | models.Q(shift__employee=request.user)
+        ).select_related("shift", "requested_by", "requested_to")
+
+        serializer = ShiftTakeRequestSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+

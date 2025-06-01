@@ -25,6 +25,7 @@ class Schedule(models.Model):
     end_date = models.DateField()
     is_published = models.BooleanField(default=False)
     acknowledged_by = models.ManyToManyField(User, related_name='acknowledged_schedules', blank=True)
+    require_admin_swap_approval = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.name} ({self.start_date} - {self.end_date})"
@@ -122,4 +123,15 @@ class ShiftSwapRequest(models.Model):
     def __str__(self):
         return f"{self.requested_by.username} requests {self.target_shift} in exchange for {self.requesting_shift}"
 
+
+class ShiftTakeRequest(models.Model):
+    shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='take_requests_sent')
+    requested_to = models.ForeignKey(User, on_delete=models.CASCADE, related_name='take_requests_received')
+    approved_by_target = models.BooleanField(default=False)
+    approved_by_admin = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.requested_by.username} → take {self.shift} from {self.requested_to.username}"
 

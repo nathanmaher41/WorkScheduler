@@ -135,3 +135,23 @@ class ShiftTakeRequest(models.Model):
     def __str__(self):
         return f"{self.requested_by.username} → take {self.shift} from {self.requested_to.username}"
 
+class InboxNotification(models.Model):
+    NOTIFICATION_TYPES = [
+        ('SWAP_REQUEST', 'Swap Request'),
+        ('TAKE_REQUEST', 'Take Request'),
+        ('SCHEDULE_RELEASE', 'Schedule Release'),
+        ('REQUEST_OFF_APPROVAL', 'Request Off Approval'),
+        # Add more as needed
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=32, choices=NOTIFICATION_TYPES)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    related_object_id = models.IntegerField(null=True, blank=True)  # optional: link to shift/schedule/etc.
+
+    def __str__(self):
+        return f"{self.user} - {self.notification_type} - {self.message[:20]}"
+

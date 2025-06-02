@@ -36,7 +36,10 @@ from .views import (
     ShiftTakeAcceptView,
     ShiftTakeRejectView,
     ShiftTakeRequestListView,
-
+    InboxNotificationListView,
+    InboxUnreadCountView,
+    InboxNotificationDetailView,
+    ShiftDetailView,
 )
 
 
@@ -80,6 +83,9 @@ urlpatterns = [
     path('shifts/take/<int:take_id>/accept/', ShiftTakeAcceptView.as_view(), name='shift-take-accept'),
     path('shifts/take/<int:take_id>/reject/', ShiftTakeRejectView.as_view(), name='shift-take-reject'),
     path("shifts/take/requests/", ShiftTakeRequestListView.as_view()),
-
+    path('inbox/', InboxNotificationListView.as_view(), name='inbox'),
+    path('inbox/unread-count/', InboxUnreadCountView.as_view()),
+     path('inbox/<int:pk>/', InboxNotificationDetailView.as_view()),
+     path('shifts/<int:pk>/', ShiftDetailView.as_view()),
 
 ]

@@ -16,7 +16,8 @@ from .models import (
     CalendarMembership, 
     CalendarRole, 
     ShiftSwapRequest,
-    ShiftTakeRequest
+    ShiftTakeRequest,
+    InboxNotification
 )
 from .serializers import (
     RegisterSerializer,
@@ -35,7 +36,8 @@ from .serializers import (
     CalendarJoinSerializer,
     CalendarMembershipSimpleSerializer,
     ShiftSwapRequestSerializer,
-    ShiftTakeRequestSerializer
+    ShiftTakeRequestSerializer,
+    InboxNotificationSerializer
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -648,18 +650,13 @@ class ShiftSwapRequestListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # Requests sent by the current user
         sent_requests = ShiftSwapRequest.objects.filter(requested_by=request.user)
-
-        # Requests targeting the current user's shifts
         received_requests = ShiftSwapRequest.objects.filter(target_shift__employee=request.user)
-
         combined = sent_requests.union(received_requests)
-
         serializer = ShiftSwapRequestSerializer(combined, many=True)
         return Response(serializer.data)
 
-# Accept shift swap (by target shift holder)
+
 class ShiftSwapAcceptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -669,7 +666,6 @@ class ShiftSwapAcceptView(APIView):
                 'requesting_shift__schedule',
                 'target_shift__schedule'
             ).get(id=swap_id)
-
         except ShiftSwapRequest.DoesNotExist:
             return Response({"error": "Swap request not found."}, status=404)
 
@@ -680,7 +676,6 @@ class ShiftSwapAcceptView(APIView):
         swap.save()
 
         if not swap.target_shift.schedule.require_admin_swap_approval:
-            # Perform the swap
             with transaction.atomic():
                 a = swap.requesting_shift
                 b = swap.target_shift
@@ -695,7 +690,14 @@ class ShiftSwapAcceptView(APIView):
                 swap.approved_by_admin = True
                 swap.save()
 
-                # Clean up: remove all other requests involving a or b
+                from .models import InboxNotification
+                InboxNotification.objects.create(
+                    user=swap.requested_by,
+                    notification_type='SWAP_REQUEST',
+                    message='Your swap request was approved.',
+                    related_object_id=swap.id
+                )
+
                 ShiftSwapRequest.objects.filter(
                     models.Q(requesting_shift=a) | models.Q(target_shift=a) |
                     models.Q(requesting_shift=b) | models.Q(target_shift=b)
@@ -703,10 +705,9 @@ class ShiftSwapAcceptView(APIView):
 
                 swap.delete()
 
-
         return Response({"message": "Swap approved successfully."})
 
-# Reject shift swap (by target shift holder)
+
 class ShiftSwapRejectView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -722,41 +723,57 @@ class ShiftSwapRejectView(APIView):
         swap.delete()
         return Response({"message": "Swap request rejected and deleted."})
 
+
 class ShiftTakeRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         shift_id = request.data.get('shift_id')
-        direction = request.data.get('direction')  # "give" or "take"
-        target_user_id = request.data.get('user_id')  # other party
+        direction = request.data.get('direction')
+        target_user_id = request.data.get('user_id')
 
         try:
             shift = Shift.objects.get(id=shift_id)
         except Shift.DoesNotExist:
             return Response({"error": "Shift not found."}, status=404)
 
+        from .models import InboxNotification
+
         if direction == "take":
-            # current user is requesting to take this shift
             if shift.employee.id == request.user.id:
                 return Response({"error": "You already own this shift."}, status=400)
-            ShiftTakeRequest.objects.create(
+            take_request = ShiftTakeRequest.objects.create(
                 shift=shift,
                 requested_by=request.user,
                 requested_to=shift.employee
             )
+            InboxNotification.objects.create(
+                user=shift.employee,
+                notification_type='TAKE_REQUEST',
+                message=f'{request.user.get_full_name()} wants to take your shift.',
+                related_object_id=take_request.id
+            )
+
         elif direction == "give":
             if shift.employee.id != request.user.id:
                 return Response({"error": "You can't give away someone else's shift."}, status=403)
             recipient = get_object_or_404(User, id=target_user_id)
-            ShiftTakeRequest.objects.create(
+            take_request = ShiftTakeRequest.objects.create(
                 shift=shift,
                 requested_by=request.user,
                 requested_to=recipient
+            )
+            InboxNotification.objects.create(
+                user=recipient,
+                notification_type='TAKE_REQUEST',
+                message=f'{request.user.get_full_name()} is asking you to take their shift.',
+                related_object_id=take_request.id
             )
         else:
             return Response({"error": "Invalid direction."}, status=400)
 
         return Response({"message": "Take request submitted."})
+
 
 class ShiftTakeAcceptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -770,18 +787,27 @@ class ShiftTakeAcceptView(APIView):
         if take.requested_to != request.user:
             return Response({"error": "You are not the recipient."}, status=403)
 
-        # Determine direction
         direction = "give" if take.requested_by == take.shift.employee else "take"
 
         with transaction.atomic():
             if direction == "take":
                 take.shift.employee = take.requested_by
-            else:  # direction == "give"
+            else:
                 take.shift.employee = take.requested_to
             take.shift.save()
+
+            from .models import InboxNotification
+            InboxNotification.objects.create(
+                user=take.requested_by,
+                notification_type='TAKE_REQUEST',
+                message='Your shift take request was approved.',
+                related_object_id=take.id
+            )
+
             take.delete()
 
         return Response({"message": "Shift successfully taken."})
+
 
 class ShiftTakeRejectView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -797,6 +823,7 @@ class ShiftTakeRejectView(APIView):
 
         take.delete()
         return Response({"message": "Shift take request rejected."})
+
 
 class ShiftTakeRequestListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -814,9 +841,68 @@ class ShiftTakeRequestListView(APIView):
             models.Q(requested_to=request.user)
         )
 
-
         serializer = ShiftTakeRequestSerializer(qs, many=True)
         return Response(serializer.data)
+
+
+class InboxNotificationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        notification_type = request.query_params.get('type')
+        is_active = request.query_params.get('active')
+        is_read = request.query_params.get('read')
+
+        qs = InboxNotification.objects.filter(user=request.user)
+
+        if notification_type:
+            qs = qs.filter(notification_type=notification_type)
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() == 'true')
+        if is_read is not None:
+            qs = qs.filter(is_read=is_read.lower() == 'true')
+
+        qs = qs.order_by('-created_at')
+
+        from .serializers import InboxNotificationSerializer
+        serializer = InboxNotificationSerializer(qs, many=True)
+        return Response(serializer.data)
+
+class InboxUnreadCountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        count = InboxNotification.objects.filter(user=request.user, is_read=False).count()
+        return Response({ "unread_count": count })
+
+class InboxNotificationDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            notification = InboxNotification.objects.get(pk=pk, user=request.user)
+        except InboxNotification.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=404)
+
+        serializer = InboxNotificationSerializer(notification, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+
+class ShiftDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            shift = Shift.objects.get(pk=pk)
+        except Shift.DoesNotExist:
+            return Response({'detail': 'Shift not found.'}, status=404)
+
+        from .serializers import ShiftSerializer
+        serializer = ShiftSerializer(shift)
+        return Response(serializer.data)
+
 
 
 

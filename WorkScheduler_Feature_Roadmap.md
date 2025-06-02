@@ -43,16 +43,17 @@
 - [ ] Prevent shift creation on closed days
 - [ ] Add workplace-wide holidays
 - [ ] Request days off on main calendar
+- [ ] Inbox
 - [ ] Ask for a shift without swapping 
   - [ ] Admin approval required so not too many hours
 
 ---
 
 ## 🔄 Shift Swapping Flow
-- [ ] UI for selecting swap target shift
-- [ ] Pending swap queue
+- [x] UI for selecting swap target shift
+- [x] Pending swap queue
 - [ ] Employee + Admin approvals
-- [ ] Rejection flow
+- [x] Rejection flow
 - [ ] Push notifications or email alert
 
 ---
@@ -64,6 +65,8 @@
 - [ ] Push notifications:
   - [ ] New shifts
   - [ ] Swaps requested
+  - [ ] Take/Give requested
+  - [ ] New schedule release
   - [ ] Approvals
 
 ---

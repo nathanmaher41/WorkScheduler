@@ -4,6 +4,10 @@ import CreateCalendarModal from '../components/CreateCalendarModal';
 import CalendarCard from '../components/CalendarCard';
 import JoinCalendarModal from '../components/JoinCalendarModal';
 import UserSettingsModal from '../components/UserSettingsModal';
+import InboxModal from '../components/InboxModal';
+import InboxIcon from '../components/InboxIcon';
+import SettingsIcon from '../components/SettingsIcon';
+import CalendarIcon from '../components/CalendarIcon';
 
 export default function Dashboard() {
    const [calendars, setCalendars] = useState([]);
@@ -17,6 +21,7 @@ export default function Dashboard() {
    const [dropdownOpen, setDropdownOpen] = useState(false);
    const [sortMethod, setSortMethod] = useState('alphabetical');
    const [roleFilters, setRoleFilters] = useState([]);
+   const [showInbox, setShowInbox] = useState(false);
 
    const currentUsername = localStorage.getItem('username');
 
@@ -190,11 +195,12 @@ export default function Dashboard() {
                    <div className="flex gap-2 relative">
                        <div className="relative">
                            <button
-                               onClick={() => setDropdownOpen(!dropdownOpen)}
-                               className="bg-purple-500 dark:bg-purple-600 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-500"
-                           >
-                               ➕ Options
-                           </button>
+                                onClick={() => setDropdownOpen(!dropdownOpen)}
+                                className="flex items-center gap-2 bg-purple-500 dark:bg-purple-600 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-500"
+                                >
+                                <CalendarIcon className="w-5 h-5" /> 
+                                Options
+                            </button>
                            {dropdownOpen && (
                                <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-700 shadow-lg rounded-md z-10">
                                    <button
@@ -204,7 +210,7 @@ export default function Dashboard() {
                                        }}
                                        className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600"
                                    >
-                                       ╋ Create Calendar
+                                       + Create Calendar
                                    </button>
                                    <button
                                        onClick={() => {
@@ -218,12 +224,19 @@ export default function Dashboard() {
                                </div>
                            )}
                        </div>
+                        <button
+                            onClick={() => setShowInbox(true)}
+                            className="flex items-center gap-2 bg-blue-300 dark:bg-blue-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-blue-400 dark:hover:bg-blue-600"
+                            >
+                            <InboxIcon/>
+                        </button>
                        <button
                            onClick={() => setShowSettingsModal(true)}
                            className="bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600"
                        >
-                           ⚙️ Settings
+                           <SettingsIcon/> 
                        </button>
+                       
                    </div>
                </div>
 
@@ -266,6 +279,9 @@ export default function Dashboard() {
                <UserSettingsModal
                    onClose={() => setShowSettingsModal(false)}
                />
+           )}
+           {showInbox && (
+               <InboxModal isOpen={showInbox} onClose={() => setShowInbox(false)} />
            )}
        </div>
    );

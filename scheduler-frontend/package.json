@@ -27,6 +27,7 @@
     "react-hook-form": "^7.56.4",
     "react-router-dom": "^7.6.0",
     "react-toastify": "^11.0.5",
+    "tailwind-scrollbar": "^3.0.1",
     "yup": "^1.6.1"
   },
   "devDependencies": {

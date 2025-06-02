@@ -1,10 +1,26 @@
-import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import EyelashClosed from './EyelashClosed';
 import EyelashOpen from './EyelashOpen';
 
 export default function PasswordInput({ name, value, onChange, placeholder }) {
   const [visible, setVisible] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains('dark');
+    setDarkMode(isDark);
+
+    const observer = new MutationObserver(() => {
+      setDarkMode(document.documentElement.classList.contains('dark'));
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   const handleChange = (e) => {
     if (e?.target?.name && typeof onChange === 'function') {
@@ -28,7 +44,7 @@ export default function PasswordInput({ name, value, onChange, placeholder }) {
         onClick={() => setVisible(!visible)}
         className="absolute right-3 top-2.5 text-gray-400 cursor-pointer"
       >
-        {visible ? <EyelashOpen /> : <EyelashClosed />}
+        {visible ? <EyelashOpen dark={darkMode} /> : <EyelashClosed dark={darkMode} />}
       </div>
     </div>
   );

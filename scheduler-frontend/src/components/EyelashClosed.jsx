@@ -1,12 +1,12 @@
-// components/EyeLashOpen.jsx
 import EyeClosed from '../resources/svgwebsite.svg';
-export default function EyelashClosed() {
+import EyeClosedWhite from '../resources/eyeclosedwhite.svg';
+
+export default function EyelashClosed({ dark }) {
   return (
     <img
-      src={EyeClosed}
+      src={dark ? EyeClosedWhite : EyeClosed}
       alt="Closed Eye with Lashes"
       className="w-6 h-6"
     />
   );
 }
-

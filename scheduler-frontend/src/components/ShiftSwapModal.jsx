@@ -140,6 +140,14 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     }
   };
 
+  const hasAlreadyRequestedTake = pendingTakes.some(
+    (req) =>
+      Number(req.shift) === Number(shift.id) &&
+      req.direction === 'take' &&
+      req.requested_by_id === currentUserId
+  );
+
+
 
   const formatDate = (datetimeStr) => new Date(datetimeStr).toLocaleDateString();
   const formatTime = (datetimeStr) => new Date(datetimeStr).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -205,6 +213,17 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     };
   });
 
+  const usedGiveRequestUserIds = new Set(
+    enrichedTakes
+      .filter(req =>
+        req.direction === 'give' &&
+        req.requested_by_id === currentUserId &&
+        req.shift === shift.id
+      )
+      .map(req => req.requested_to_id)
+  );
+
+
 
 
   if (!isOpen || !shift) return null;
@@ -226,7 +245,7 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
             Swap Shift
           </button>
           <button
-            className={`px-3 py-1 rounded ${mode === 'take' ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+            className={`px-3 py-1 rounded ${mode === 'take' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
             onClick={() => setMode('take')}
           >
             Take Shift
@@ -299,20 +318,22 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                 <select className="w-full border p-2 rounded dark:bg-gray-700 dark:text-white" value={selectedMemberId} onChange={e => setSelectedMemberId(e.target.value)}>
                   <option value="">-- Select a Member --</option>
                   {members.filter(m => m.id !== currentUserId).map(member => (
-                    <option key={member.id} value={member.id}>{member.full_name}</option>
+                    <option key={member.id} value={member.id} disabled={usedGiveRequestUserIds.has(member.id)}>{member.full_name}</option>
                   ))}
                 </select>
-                <button className="mt-2 px-3 py-1 bg-yellow-600 text-white rounded" onClick={() => handleRequestTake('give')} disabled={!selectedMemberId}>Request Take</button>
+                <button className="mt-2 px-3 py-1 bg-purple-600 text-white rounded" onClick={() => handleRequestTake('give')} disabled={!selectedMemberId || usedGiveRequestUserIds.has(Number(selectedMemberId))}>Request Take</button>
               </div>
             ) : (
               <div className="mt-4">
                 <h3 className="font-semibold mb-2">Request to take this shift:</h3>
-                <button className="px-3 py-1 bg-blue-600 text-white rounded" onClick={() => handleRequestTake('take')}>Take Shift</button>
+                <button className="px-3 py-1 bg-purple-600 text-white rounded" onClick={() => handleRequestTake('take')} disabled={hasAlreadyRequestedTake}>
+                  {hasAlreadyRequestedTake ? 'Request Sent' : 'Take Shift'}
+                </button>
               </div>
             )}
 
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold mb-2">Take Requests</h3>
+            <div className="mt-2">
+              <h3 className="font-semibold mb-2">Take Requests</h3>
               {allRelevantTakes.length > 0 ? (
                 <ul className="text-sm space-y-2">
                   {enrichedTakes.map((req) => {
@@ -349,7 +370,7 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                     }
 
                     return (
-                      <li key={req.id} className="flex flex-col gap-1">
+                      <li key={req.id} className="text-sm space-y-1">
                         {content}
                       </li>
                     );

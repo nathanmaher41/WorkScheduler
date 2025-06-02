@@ -75,8 +75,9 @@ export default function ShiftCreateModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { hours: startH, minutes: startM } = convertTo24Hour(startHourMinute, startPeriod);
-      const { hours: endH, minutes: endM } = convertTo24Hour(endHourMinute, endPeriod);
+      const { hours: startH, minutes: startM } = convertTo24Hour(startHourMinute.includes(':') ? startHourMinute : `${startHourMinute}:00`, startPeriod);
+      const { hours: endH, minutes: endM } = convertTo24Hour(endHourMinute.includes(':') ? endHourMinute : `${endHourMinute}:00`, endPeriod);
+
 
       const start = new Date(selectedDate);
       start.setHours(startH, startM, 0, 0);

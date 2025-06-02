@@ -1,7 +1,18 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import Schedule, ScheduleMembership, Shift, TimeOffRequest, CalendarMembership, Calendar, CalendarRole, ShiftSwapRequest, ShiftTakeRequest
+from .models import(
+    Schedule, 
+    ScheduleMembership, 
+    Shift, 
+    TimeOffRequest, 
+    CalendarMembership, 
+    Calendar, 
+    CalendarRole, 
+    ShiftSwapRequest, 
+    ShiftTakeRequest, 
+    InboxNotification
+)
 
 
 User = get_user_model()
@@ -304,6 +315,11 @@ class ShiftTakeRequestSerializer(serializers.ModelSerializer):
     def get_direction(self, obj):
         # If the requester is not the shift owner, they want to *take* the shift
         return "take" if obj.requested_to == obj.shift.employee else "give"
+
+class InboxNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InboxNotification
+        fields = '__all__'
 
 
 

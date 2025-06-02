@@ -7,12 +7,50 @@
   font-family: system-ui, sans-serif;
 }
 
-/* This ensures the today cell in dark mode is white with black text */
-/* Force black number text for today's cell in dark mode */
-/* .dark .rbc-today .rbc-button-link {
-  color: black !important;
-}
-.dark .rbc-today {
-  background-color: rgb(0, 0, 0) !important;
+/* Remove the background on scrollbar track when hovered/active (for webkit-based browsers) */
+/* ::-webkit-scrollbar-track:hover,
+::-webkit-scrollbar-track:active {
+  background: transparent !important;
 } */
+
+/* Default track (matches dark/light mode transparently) */
+/* ::-webkit-scrollbar-track {
+  background: transparent;
+} */
+
+/* Remove hover background and corners across all parts of the scrollbar */
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-track:hover,
+::-webkit-scrollbar-track:active,
+::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+::-webkit-scrollbar {
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background-color: rgba(107, 114, 128, 0.7); /* Tailwind's gray-500 */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(75, 85, 99, 0.7); /* Tailwind's gray-600 */
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: rgba(107, 114, 128, 0.6); /* Tailwind gray-500 */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(75, 85, 99, 0.6); /* Tailwind gray-600 */
+}
+
+
 

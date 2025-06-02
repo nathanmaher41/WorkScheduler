@@ -9,6 +9,8 @@ import axios from '../utils/axios';
 import ShiftCreateModal from '../components/ShiftCreateModal';
 import ScheduleCreateModal from '../components/ScheduleCreateModal';
 import ShiftSwapModal from '../components/ShiftSwapModal';
+import InboxIcon from '../components/InboxIcon';
+import InboxModal from '../components/InboxModal';
 
 export default function CalendarView() {
   const { id } = useParams();
@@ -27,88 +29,11 @@ export default function CalendarView() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [selectedShift, setSelectedShift] = useState(null);
+  const [showInbox, setShowInbox] = useState(false);
 
 
 
   useEffect(() => {
-    // const fetchShifts = async () => {
-    //   if (!activeSchedule) return;
-    //   try {
-    //     const [shiftsRes, currentUserRes] = await Promise.all([
-    //       axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
-    //       axios.get('/api/user/')
-    //     ]);
-
-    //     const userId = currentUserRes.data.id;
-    //     setCurrentUserId(userId);
-
-        
-
-    //     const shifts = shiftsRes.data.map((shift) => {
-    //       const date = new Date(shift.start_time);
-    //       const shiftDate = date.toISOString().split('T')[0];
-    //       return {
-    //         ...shift,
-    //         shiftDate
-    //       };
-    //     });
-
-    //     const userShiftDates = new Set(
-    //       shifts.filter(s => s.employee === userId).map(s => s.shiftDate)
-    //     );
-
-    //     const filtered = shifts.filter((shift) => {
-    //       const { shiftDate } = shift;
-    //       const include =
-    //         shiftFilter === 'mine' ? shift.employee === userId :
-    //         shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
-    //         shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
-    //         shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
-    //         true;
-    //       if (!include) {
-    //         console.log('Filtered OUT:', shift);
-    //       }
-    //       return include;
-    //     });
-
-    //     const formatted = filtered.map((shift) => {
-    //       const start = new Date(shift.start_time);
-    //       const end = new Date(shift.end_time);
-
-    //       const formatTime = (time) => {
-    //         const hours = time.getHours();
-    //         const minutes = time.getMinutes();
-    //         return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
-    //       };
-
-    //       const viewType = calendarRef.current?.getApi().view.type;
-    //       const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
-    //       const startStr = formatTime(start);
-    //       const endStr = formatTime(end);
-    //       const timeStr = showAMPM
-    //         ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-    //         : `${startStr} - ${endStr}`;
-
-    //       const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
-    //       return {
-    //         id: shift.id,
-    //         title: `${fullName}\n${timeStr}`,
-    //         start,
-    //         end,
-    //         backgroundColor: shift.color || '#8b5cf6',
-    //         textColor: 'white',
-    //         extendedProps: { shiftData: shift },
-    //         allDay: false
-    //       };
-    //     });
-
-    //     console.log('Filtered Shifts to Display:', formatted);
-    //     setEvents(formatted);
-    //   } catch (err) {
-    //     console.error('Error loading shifts', err);
-    //   }
-    // };
-    // fetchShifts();
     refreshShifts();
   }, [activeSchedule, shiftFilter, selectedMemberIds]);
 
@@ -261,9 +186,15 @@ export default function CalendarView() {
   return (
     <div className="flex p-6 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <div className="flex-1 mr-6">
-        <h1 className="text-2xl font-bold mb-4">
-          Calendar View {activeSchedule && `— ${activeSchedule.name}`}
-        </h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">
+            Calendar View {activeSchedule && `— ${activeSchedule.name}`}
+          </h1>
+          <div className="flex gap-2 items-center">
+            <button  className="flex items-center gap-2 bg-blue-300 dark:bg-blue-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-blue-400 dark:hover:bg-blue-600" onClick={() => setShowInbox(true)}><InboxIcon /></button >
+            <button onClick={() => setShowSettingsModal(true)}>Settings ⚙️</button>
+          </div>
+        </div>
         <div className="bg-white dark:bg-gray-800 rounded shadow p-4">
           <FullCalendar
             ref={calendarRef}
@@ -431,15 +362,6 @@ export default function CalendarView() {
             ))}
           </ul>
         </div>
-
-        {isCalendarAdmin && (
-          <button
-            className="mt-4 w-full bg-purple-500 dark:bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-500"
-            onClick={() => setShowScheduleModal(true)}
-          >
-            + Create Schedule
-          </button>
-        )}
       </div>
 
       {showShiftModal && (
@@ -480,7 +402,26 @@ export default function CalendarView() {
           }}
         />
       )}
-
+      {showInbox && (
+        <InboxModal
+          isOpen={showInbox}
+          onClose={() => setShowInbox(false)}
+          onNotificationClick={(note) => {
+            if (
+              (note.notification_type === 'SWAP_REQUEST' || note.notification_type === 'TAKE_REQUEST') &&
+              note.related_object_id
+            ) {
+              const matched = events.find(e => e.id === note.related_object_id);
+              if (matched) {
+                setSelectedShift(matched.extendedProps.shiftData);
+                setShowSwapModal(true);
+              } else {
+                console.warn("No matching shift found in events for ID:", note.related_object_id);
+              }
+            }
+          }}
+        />
+      )}
       {showScheduleModal && (
         <ScheduleCreateModal
           isOpen={showScheduleModal}

@@ -317,9 +317,20 @@ class ShiftTakeRequestSerializer(serializers.ModelSerializer):
         return "take" if obj.requested_to == obj.shift.employee else "give"
 
 class InboxNotificationSerializer(serializers.ModelSerializer):
+    calendar = serializers.SerializerMethodField()
+
     class Meta:
         model = InboxNotification
-        fields = '__all__'
+        fields = ['id', 'notification_type', 'message', 'created_at', 'is_read', 'is_active', 'related_object_id', 'calendar']
+
+    def get_calendar(self, obj):
+        if obj.calendar:
+            return {
+                'id': obj.calendar.id,
+                'name': obj.calendar.name
+            }
+        return None
+
 
 
 

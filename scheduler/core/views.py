@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .permissions import IsScheduleAdmin
+from django.utils.timezone import localtime
 from rest_framework.permissions import IsAuthenticated
 from .models import (
     Schedule, 
@@ -57,6 +58,17 @@ import random
 from rest_framework.exceptions import PermissionDenied
 
 User = get_user_model()
+
+
+#helper functions
+def format_shift_time(shift):
+    start = localtime(shift.start_time)
+    end = localtime(shift.end_time)
+    date = start.strftime("%b %-d")  # e.g. "Jun 2"
+    time_range = f"{start.strftime('%-I:%M %p')}–{end.strftime('%-I:%M %p')}"  # e.g. "2:00 PM–6:00 PM"
+    return f"{date} from {time_range}"
+
+#views functions
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -260,13 +272,23 @@ class ShiftSwapRequestView(APIView):
             return Response({"error": "Shifts must be in the same schedule."}, status=400)
 
         # Create new swap request
-        ShiftSwapRequest.objects.create(
+        swap_request = ShiftSwapRequest.objects.create(
             requesting_shift=requesting_shift,
             target_shift=target_shift,
             requested_by=request.user
         )
 
+        # Notify the target employee
+        InboxNotification.objects.create(
+            user=target_shift.employee,
+            notification_type='SWAP_REQUEST',
+            message=f"{request.user.get_full_name()} wants to swap their shift on {format_shift_time(requesting_shift)} with your shift on {format_shift_time(target_shift)}.",
+            related_object_id=requesting_shift.id,
+            calendar=requesting_shift.schedule.calendar
+        )
+
         return Response({"message": "Swap request submitted."})
+
 
 class ShiftSwapApproveView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -694,10 +716,10 @@ class ShiftSwapAcceptView(APIView):
                 InboxNotification.objects.create(
                     user=swap.requested_by,
                     notification_type='SWAP_REQUEST',
-                    message='Your swap request was approved.',
-                    related_object_id=swap.id
+                    message=f"Your swap request for {format_shift_time(swap.requesting_shift)} was approved.",
+                    related_object_id=swap.requesting_shift.id,
+                    calendar=swap.requesting_shift.schedule.calendar  # ✅ always scoped correctly
                 )
-
                 ShiftSwapRequest.objects.filter(
                     models.Q(requesting_shift=a) | models.Q(target_shift=a) |
                     models.Q(requesting_shift=b) | models.Q(target_shift=b)
@@ -713,12 +735,21 @@ class ShiftSwapRejectView(APIView):
 
     def post(self, request, swap_id):
         try:
-            swap = ShiftSwapRequest.objects.get(id=swap_id)
+            swap = ShiftSwapRequest.objects.select_related('requesting_shift__schedule').get(id=swap_id)
         except ShiftSwapRequest.DoesNotExist:
             return Response({"error": "Swap request not found."}, status=404)
 
         if swap.target_shift.employee != request.user:
             return Response({"error": "You are not authorized to reject this swap."}, status=403)
+
+        # Create rejection notification before deleting the swap
+        InboxNotification.objects.create(
+            user=swap.requested_by,
+            notification_type='SWAP_REQUEST',
+            message=f"Your swap request for {format_shift_time(swap.requesting_shift)} was rejected.",
+            related_object_id=swap.requesting_shift.id,
+            calendar=swap.requesting_shift.schedule.calendar
+        )
 
         swap.delete()
         return Response({"message": "Swap request rejected and deleted."})
@@ -750,8 +781,9 @@ class ShiftTakeRequestView(APIView):
             InboxNotification.objects.create(
                 user=shift.employee,
                 notification_type='TAKE_REQUEST',
-                message=f'{request.user.get_full_name()} wants to take your shift.',
-                related_object_id=take_request.id
+                message=f"{request.user.get_full_name()} wants to take your shift on {format_shift_time(shift)}",
+                related_object_id=take_request.shift.id,
+                calendar=shift.schedule.calendar
             )
 
         elif direction == "give":
@@ -766,8 +798,9 @@ class ShiftTakeRequestView(APIView):
             InboxNotification.objects.create(
                 user=recipient,
                 notification_type='TAKE_REQUEST',
-                message=f'{request.user.get_full_name()} is asking you to take their shift.',
-                related_object_id=take_request.id
+                message=f"{request.user.get_full_name()} is asking you to take their shift on {format_shift_time(shift)}",
+                related_object_id=take_request.shift.id,
+                calendar=shift.schedule.calendar
             )
         else:
             return Response({"error": "Invalid direction."}, status=400)
@@ -800,8 +833,9 @@ class ShiftTakeAcceptView(APIView):
             InboxNotification.objects.create(
                 user=take.requested_by,
                 notification_type='TAKE_REQUEST',
-                message='Your shift take request was approved.',
-                related_object_id=take.id
+                message=f"Your shift take request for {format_shift_time(take.shift)} was approved.",
+                related_object_id=take.shift.id,  # ✅ needs to open the shift modal
+                calendar=take.shift.schedule.calendar
             )
 
             take.delete()
@@ -820,7 +854,14 @@ class ShiftTakeRejectView(APIView):
 
         if take.requested_to != request.user:
             return Response({"error": "You are not the recipient."}, status=403)
-
+        
+        InboxNotification.objects.create(
+            user=take.requested_by,
+            notification_type='TAKE_REQUEST',
+            message=f"Your shift take request for {format_shift_time(take.shift)} was rejected.",
+            related_object_id=take.shift.id,
+            calendar=take.shift.schedule.calendar
+        )
         take.delete()
         return Response({"message": "Shift take request rejected."})
 
@@ -852,9 +893,12 @@ class InboxNotificationListView(APIView):
         notification_type = request.query_params.get('type')
         is_active = request.query_params.get('active')
         is_read = request.query_params.get('read')
+        calendar_id = request.query_params.get('calendar_id')  # 👈 NEW
 
         qs = InboxNotification.objects.filter(user=request.user)
 
+        if calendar_id:
+            qs = qs.filter(calendar_id=calendar_id)
         if notification_type:
             qs = qs.filter(notification_type=notification_type)
         if is_active is not None:
@@ -864,7 +908,6 @@ class InboxNotificationListView(APIView):
 
         qs = qs.order_by('-created_at')
 
-        from .serializers import InboxNotificationSerializer
         serializer = InboxNotificationSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -872,8 +915,12 @@ class InboxUnreadCountView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        count = InboxNotification.objects.filter(user=request.user, is_read=False).count()
-        return Response({ "unread_count": count })
+        calendar_id = request.query_params.get('calendar_id')
+        qs = InboxNotification.objects.filter(user=request.user, is_read=False)
+        if calendar_id:
+            qs = qs.filter(calendar_id=calendar_id)
+        return Response({"unread_count": qs.count()})
+
 
 class InboxNotificationDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -903,6 +950,60 @@ class ShiftDetailView(APIView):
         serializer = ShiftSerializer(shift)
         return Response(serializer.data)
 
+# views.py
+class CalendarShiftListView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request, calendar_id):
+        shifts = Shift.objects.filter(schedule__calendar_id=calendar_id)
+        serializer = ShiftSerializer(shifts, many=True)
+        return Response(serializer.data)
 
+class ShiftSwapCancelView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, swap_id):
+        try:
+            swap = ShiftSwapRequest.objects.select_related('target_shift__employee', 'requesting_shift__schedule').get(id=swap_id)
+        except ShiftSwapRequest.DoesNotExist:
+            return Response({"error": "Swap request not found."}, status=404)
+
+        if swap.requested_by != request.user:
+            return Response({"error": "You are not authorized to cancel this swap request."}, status=403)
+
+        # Notify recipient
+        InboxNotification.objects.create(
+            user=swap.target_shift.employee,
+            notification_type='SWAP_REQUEST',
+            message=f"{request.user.get_full_name()} cancelled their swap request.",
+            related_object_id=swap.requesting_shift.id,
+            calendar=swap.requesting_shift.schedule.calendar
+        )
+
+        swap.delete()
+        return Response({"message": "Swap request cancelled."})
+
+class ShiftTakeCancelView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, take_id):
+        try:
+            take = ShiftTakeRequest.objects.select_related('shift__schedule', 'requested_to').get(id=take_id)
+        except ShiftTakeRequest.DoesNotExist:
+            return Response({"error": "Take request not found."}, status=404)
+
+        if take.requested_by != request.user:
+            return Response({"error": "You are not authorized to cancel this take request."}, status=403)
+
+        # Notify recipient
+        InboxNotification.objects.create(
+            user=take.requested_to,
+            notification_type='TAKE_REQUEST',
+            message=f"{request.user.get_full_name()} cancelled their shift take request.",
+            related_object_id=take.shift.id,
+            calendar=take.shift.schedule.calendar
+        )
+
+        take.delete()
+        return Response({"message": "Take request cancelled."})
 

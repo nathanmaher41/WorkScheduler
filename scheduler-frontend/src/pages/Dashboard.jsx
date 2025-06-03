@@ -8,6 +8,8 @@ import InboxModal from '../components/InboxModal';
 import InboxIcon from '../components/InboxIcon';
 import SettingsIcon from '../components/SettingsIcon';
 import CalendarIcon from '../components/CalendarIcon';
+import DashboardInboxModal from '../components/DashboardInboxModal';
+
 
 export default function Dashboard() {
    const [calendars, setCalendars] = useState([]);
@@ -281,7 +283,7 @@ export default function Dashboard() {
                />
            )}
            {showInbox && (
-               <InboxModal isOpen={showInbox} onClose={() => setShowInbox(false)} />
+               <DashboardInboxModal isOpen={showInbox} onClose={() => setShowInbox(false)} />
            )}
        </div>
    );

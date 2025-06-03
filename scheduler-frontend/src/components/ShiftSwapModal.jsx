@@ -178,12 +178,25 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     )
   );
 
+  const handleCancelSwap = async (swapId) => {
+  try {
+    await axios.delete(`/api/swap/cancel/${swapId}/`);
+    setSuccessMessage('Swap request cancelled.');
+    await fetchPendingSwaps();
+  } catch (err) {
+    console.error('Error cancelling swap:', err);
+  }
+};
 
-
-  console.log("pendingTakes", pendingTakes);
-  console.log("currentUserId", currentUserId);
-  console.log("shift.id", shift.id);
-  console.log("allRelevantTakes", allRelevantTakes);
+  const handleCancelTake = async (takeId) => {
+    try {
+      await axios.delete(`/api/take/cancel/${takeId}/`);
+      setSuccessMessage('Take request cancelled.');
+      await fetchPendingTakes();
+    } catch (err) {
+      console.error('Error cancelling take:', err);
+    }
+  };
 
 
 
@@ -361,11 +374,21 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                       );
                     } else if (req.isOutgoingTake) {
                       content = (
-                        <div>Pending request to take this shift from {req.shift_owner}</div>
+                        <>
+                          <div>Pending request to take this shift from {req.shift_owner}</div>
+                          <div className="flex gap-3">
+                            <button onClick={() => handleCancelTake(req.id)} className="text-purple-600 hover:underline">Cancel</button>
+                          </div>
+                        </>
                       );
                     } else if (req.isOutgoingGive) {
                       content = (
-                        <div>Pending request asking {req.shift_owner} to take this shift</div>
+                        <>
+                          <div>Pending request asking {req.shift_owner} to take this shift</div>
+                          <div className="flex gap-3">
+                            <button onClick={() => handleCancelTake(req.id)} className="text-purple-600 hover:underline">Cancel</button>
+                          </div>
+                        </>
                       );
                     }
 
@@ -407,12 +430,18 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                           : 'Unknown time'}
                       </>
                     )}
-                    {isActionable && (
-                      <div className="flex gap-4 mt-1">
-                        <button onClick={() => handleApprove(req.id)} className="text-green-600 hover:underline">Approve</button>
-                        <button onClick={() => handleReject(req.id)} className="text-red-600 hover:underline">Reject</button>
-                      </div>
-                    )}
+
+                    <div className="flex gap-4 mt-1">
+                      {isActionable && (
+                        <>
+                          <button onClick={() => handleApprove(req.id)} className="text-green-600 hover:underline">Approve</button>
+                          <button onClick={() => handleReject(req.id)} className="text-red-600 hover:underline">Reject</button>
+                        </>
+                      )}
+                      {!isIncoming && (
+                        <button onClick={() => handleCancelSwap(req.id)} className="text-purple-600 hover:underline">Cancel</button>
+                      )}
+                    </div>
                   </li>
                 );
               })}

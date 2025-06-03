@@ -12,7 +12,6 @@ from .views import (
     ShiftListView,
     ShiftSwapRequestView,
     ShiftSwapApproveView,
-    ShiftSwapRejectView,
     ShiftSwapAdminApproveView,
     IncomingSwapRequestsView,
     TimeOffRequestCreateView,
@@ -40,6 +39,9 @@ from .views import (
     InboxUnreadCountView,
     InboxNotificationDetailView,
     ShiftDetailView,
+    CalendarShiftListView,
+    ShiftSwapCancelView,
+    ShiftTakeCancelView,
 )
 
 
@@ -85,7 +87,11 @@ urlpatterns = [
     path("shifts/take/requests/", ShiftTakeRequestListView.as_view()),
     path('inbox/', InboxNotificationListView.as_view(), name='inbox'),
     path('inbox/unread-count/', InboxUnreadCountView.as_view()),
-     path('inbox/<int:pk>/', InboxNotificationDetailView.as_view()),
-     path('shifts/<int:pk>/', ShiftDetailView.as_view()),
+    path('inbox/<int:pk>/', InboxNotificationDetailView.as_view()),
+    path('shifts/<int:pk>/', ShiftDetailView.as_view()),
+    path('calendars/<int:calendar_id>/shifts/', CalendarShiftListView.as_view()),
+    path('swap/cancel/<int:swap_id>/', ShiftSwapCancelView.as_view(), name='swap-cancel'),
+    path('take/cancel/<int:take_id>/', ShiftTakeCancelView.as_view(), name='take-cancel'),
+
 
 ]

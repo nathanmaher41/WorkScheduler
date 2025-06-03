@@ -30,80 +30,100 @@ export default function CalendarView() {
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [selectedShift, setSelectedShift] = useState(null);
   const [showInbox, setShowInbox] = useState(false);
-
+  const [allShiftsRaw, setAllShiftsRaw] = useState([]);
+  const [visibleShifts, setVisibleShifts] = useState([]); // Filtered shifts for display in calendar
+  const [unreadCount, setUnreadCount] = useState(0);
 
 
   useEffect(() => {
     refreshShifts();
   }, [activeSchedule, shiftFilter, selectedMemberIds]);
 
-  const refreshShifts = async () => {
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await axios.get('/api/inbox/unread-count/', 
+          {params: { calendar_id: id }});
+        setUnreadCount(res.data.unread_count);
+      } catch (err) {
+        console.error('Failed to fetch unread count:', err);
+      }
+    };
+
+    fetchUnreadCount();
+  }, [showInbox]);
+
+
+  const refreshShifts = async (scheduleOverride = activeSchedule) => {
   if (!activeSchedule) return;
   try {
     const [shiftsRes, currentUserRes] = await Promise.all([
-      axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
-      axios.get('/api/user/')
-    ]);
+    axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
+    axios.get('/api/user/')
+  ]);
 
-    const userId = currentUserRes.data.id;
-    setCurrentUserId(userId);
+  const rawShifts = shiftsRes.data.map((shift) => {
+    const date = new Date(shift.start_time);
+    const shiftDate = date.toISOString().split('T')[0];
+    return {
+      ...shift,
+      shiftDate
+    };
+  });
 
-    const shifts = shiftsRes.data.map((shift) => {
-      const date = new Date(shift.start_time);
-      const shiftDate = date.toISOString().split('T')[0];
-      return {
-        ...shift,
-        shiftDate
-      };
-    });
 
-    const userShiftDates = new Set(
-      shifts.filter(s => s.employee === userId).map(s => s.shiftDate)
-    );
+  const userId = currentUserRes.data.id;
+  setCurrentUserId(userId);
 
-    const filtered = shifts.filter((shift) => {
-      const { shiftDate } = shift;
-      const include =
-        shiftFilter === 'mine' ? shift.employee === userId :
-        shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
-        shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
-        shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
-        true;
-      return include;
-    });
+  const userShiftDates = new Set(
+    rawShifts.filter(s => s.employee === userId).map(s => s.shiftDate)
+  );
 
-    const formatted = filtered.map((shift) => {
-      const start = new Date(shift.start_time);
-      const end = new Date(shift.end_time);
+  const filtered = rawShifts.filter((shift) => {
+    const { shiftDate } = shift;
+    const include =
+      shiftFilter === 'mine' ? shift.employee === userId :
+      shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
+      shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
+      shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
+      true;
+    return include;
+  });
 
-      const formatTime = (time) => {
-        const hours = time.getHours();
-        const minutes = time.getMinutes();
-        return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
-      };
+  setVisibleShifts(filtered);
 
-      const viewType = calendarRef.current?.getApi().view.type;
-      const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
-      const startStr = formatTime(start);
-      const endStr = formatTime(end);
-      const timeStr = showAMPM
-        ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-        : `${startStr} - ${endStr}`;
+  const formatted = filtered.map((shift) => {
+    const start = new Date(shift.start_time);
+    const end = new Date(shift.end_time);
 
-      const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
-      return {
-        id: shift.id,
-        title: `${fullName}\n${timeStr}`,
-        start,
-        end,
-        backgroundColor: shift.color || '#8b5cf6',
-        textColor: 'white',
-        extendedProps: { shiftData: shift },
-        allDay: false
-      };
-    });
+    const formatTime = (time) => {
+      const hours = time.getHours();
+      const minutes = time.getMinutes();
+      return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
+    };
 
-    setEvents(formatted);
+    const viewType = calendarRef.current?.getApi().view.type;
+    const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
+    const startStr = formatTime(start);
+    const endStr = formatTime(end);
+    const timeStr = showAMPM
+      ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+      : `${startStr} - ${endStr}`;
+
+    const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
+    return {
+      id: shift.id,
+      title: `${fullName}\n${timeStr}`,
+      start,
+      end,
+      backgroundColor: shift.color || '#8b5cf6',
+      textColor: 'white',
+      extendedProps: { shiftData: shift },
+      allDay: false
+    };
+  });
+
+  setEvents(formatted);
   } catch (err) {
     console.error('Error refreshing shifts', err);
   }
@@ -121,11 +141,29 @@ export default function CalendarView() {
         setMembers(membersRes.data);
         setSchedules(schedulesRes.data);
 
+        if (schedulesRes.data.length > 0 && !activeSchedule) {
+          const defaultSchedule = schedulesRes.data[0];
+          setActiveSchedule(defaultSchedule);
+          const newDate = new Date(defaultSchedule.start_date + 'T00:00:00');
+          setCurrentDate(newDate);
+          if (calendarRef.current) {
+            const calendarApi = calendarRef.current.getApi();
+            calendarApi.gotoDate(newDate);
+          }
+
+          // 🧠 Force refresh after setting active schedule
+          await refreshShifts(defaultSchedule);
+        }
+
         const currentUserId = userRes.data.id;
         const currentMember = membersRes.data.find((m) => m.id === currentUserId);
         setIsCalendarAdmin(currentMember?.is_admin || false);
       } catch (err) {
         console.error('Error loading calendar data:', err);
+      }
+
+      if (id) {
+        loadAllCalendarShifts();
       }
     };
 
@@ -179,8 +217,38 @@ export default function CalendarView() {
   const handleEventClick = (info) => {
     //console.log("Event clicked!", info);
     const shift = info.event.extendedProps.shiftData;
+    console.log("Clicked shift ID:", shift.id);
     setSelectedShift(shift);
     setShowSwapModal(true);
+  };
+
+  const handleNotificationClick = async (note) => {
+    const shiftId = note.related_object_id;
+    try {
+      const res = await axios.get(`/api/shifts/${shiftId}/`);
+      setSelectedShift(res.data);
+      setShowSwapModal(true);
+      setShowInbox(false);
+    } catch (err) {
+      console.warn('Shift not found from notification ID:', shiftId, err);
+    }
+  };
+
+
+  const loadAllCalendarShifts = async () => {
+    try {
+      const res = await axios.get(`/api/calendars/${id}/shifts/`);
+      const rawShifts = res.data.map((shift) => {
+        const date = new Date(shift.start_time);
+        return {
+          ...shift,
+          shiftDate: date.toISOString().split('T')[0],
+        };
+      });
+      setAllShiftsRaw(rawShifts); // ✅ correct this
+    } catch (err) {
+      console.error('Failed to load all calendar shifts:', err);
+    }
   };
 
   return (
@@ -191,7 +259,17 @@ export default function CalendarView() {
             Calendar View {activeSchedule && `— ${activeSchedule.name}`}
           </h1>
           <div className="flex gap-2 items-center">
-            <button  className="flex items-center gap-2 bg-blue-300 dark:bg-blue-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-blue-400 dark:hover:bg-blue-600" onClick={() => setShowInbox(true)}><InboxIcon /></button >
+            <button
+              className="relative flex items-center gap-2 bg-blue-300 dark:bg-blue-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-blue-400 dark:hover:bg-blue-600"
+              onClick={() => setShowInbox(true)}
+            >
+              <InboxIcon />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
             <button onClick={() => setShowSettingsModal(true)}>Settings ⚙️</button>
           </div>
         </div>
@@ -406,20 +484,8 @@ export default function CalendarView() {
         <InboxModal
           isOpen={showInbox}
           onClose={() => setShowInbox(false)}
-          onNotificationClick={(note) => {
-            if (
-              (note.notification_type === 'SWAP_REQUEST' || note.notification_type === 'TAKE_REQUEST') &&
-              note.related_object_id
-            ) {
-              const matched = events.find(e => e.id === note.related_object_id);
-              if (matched) {
-                setSelectedShift(matched.extendedProps.shiftData);
-                setShowSwapModal(true);
-              } else {
-                console.warn("No matching shift found in events for ID:", note.related_object_id);
-              }
-            }
-          }}
+          onNotificationClick={handleNotificationClick}
+          calendarId={id}
         />
       )}
       {showScheduleModal && (

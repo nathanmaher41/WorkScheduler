@@ -151,6 +151,7 @@ class InboxNotification(models.Model):
     is_read = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     related_object_id = models.IntegerField(null=True, blank=True)  # optional: link to shift/schedule/etc.
+    calendar = models.ForeignKey(Calendar, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
 
     def __str__(self):
         return f"{self.user} - {self.notification_type} - {self.message[:20]}"

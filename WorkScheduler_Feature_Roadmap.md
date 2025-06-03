@@ -43,8 +43,9 @@
 - [ ] Prevent shift creation on closed days
 - [ ] Add workplace-wide holidays
 - [ ] Request days off on main calendar
-- [ ] Inbox
-- [ ] Ask for a shift without swapping 
+- [ ] Publishing Schedules
+- [x] Inbox
+- [x] Ask for a shift without swapping 
   - [ ] Admin approval required so not too many hours
 
 ---
@@ -73,6 +74,7 @@
 
 ## 🧪 Admin Tools & History
 - [ ] Activity/audit logs (who changed what, when)
+- [ ] See who has and hasn't seen the new schedule
 - [ ] View user schedule history
 - [ ] Export calendar as PDF or CSV
 - [ ] Backup/restore calendar state
@@ -87,3 +89,18 @@
 - [ ] Middle Name showing as well as pronouns
 - [x] Highlight admins in dashboard
 
+Side notes:
+When creating a calendar if admin does not put role it defaults to NONE
+We don't leverage notes section in create shift
+We also don't say the role in the shift modal
+What to put in settings modal for calendar:
+ - changing name of calendar
+ - Promoting/demoting admin
+ - giving privelages by role
+ - changing your color
+ - changing your role
+ - admin allowing people to change their role
+ - allowing shift swaps without approval from admin
+logging in with username or email
+MOBILE CANT GET PAST LOGIN!!
+When creating a schedule and clicking a start date in a different month, end date should update to that month not go back to current date

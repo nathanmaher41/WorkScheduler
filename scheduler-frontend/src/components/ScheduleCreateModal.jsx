@@ -5,7 +5,10 @@ export default function ScheduleCreateModal({
   isOpen,
   onClose,
   onCreate,
-  calendarId
+  calendarId,
+  mode = 'create',          // or 'edit'
+  existingSchedule = null,  // used in edit mode
+  onUpdate       // called when editing is done
 }) {
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -17,22 +20,35 @@ export default function ScheduleCreateModal({
       setStartDate('');
       setEndDate('');
     }
-  }, [isOpen]);
+    else if (mode === 'edit' && existingSchedule) {
+      setName(existingSchedule.name || '');
+      setStartDate(existingSchedule.start_date || '');
+      setEndDate(existingSchedule.end_date || '');
+    }
+  }, [isOpen, mode, existingSchedule]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('/api/schedules/create/', {
-        calendar_id: calendarId,
-        name,
-        start_date: startDate,
-        end_date: endDate
-      });
-      onCreate(res.data);
-      console.log(res.data)
+      if (mode === 'edit' && existingSchedule) {
+        const res = await axios.patch(`/api/schedules/${existingSchedule.id}/edit/`, {
+          name,
+          start_date: startDate,
+          end_date: endDate,
+        });
+        onUpdate(res.data);
+      } else {
+        const res = await axios.post('/api/schedules/create/', {
+          calendar_id: calendarId,
+          name,
+          start_date: startDate,
+          end_date: endDate
+        });
+        onCreate(res.data);
+      }
       onClose();
     } catch (err) {
-      console.error('Failed to create schedule', err);
+      console.error('Failed to save schedule', err);
       alert('Something went wrong.');
     }
   };
@@ -42,7 +58,7 @@ export default function ScheduleCreateModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Create Schedule</h2>
+        <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{mode === 'edit' ? 'Edit Schedule' : 'Create Schedule'}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -92,7 +108,7 @@ export default function ScheduleCreateModal({
               type="submit"
               className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
             >
-              Save
+              {mode === 'edit' ? 'Update' : 'Save'}
             </button>
           </div>
         </form>

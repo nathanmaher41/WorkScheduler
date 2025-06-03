@@ -269,7 +269,7 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
   else{
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-full max-w-md">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-full max-w-md max-h-screen overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-black dark:text-white">Shift Details</h2>
           {isAdmin && (
@@ -383,6 +383,7 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
 
             <div className="mt-2">
               <h3 className="font-semibold mb-2">Take Requests</h3>
+              <div className="max-h-40 overflow-y-auto pr-1">
               {allRelevantTakes.length > 0 ? (
                 <ul className="text-sm space-y-2">
                   {enrichedTakes.map((req) => {
@@ -438,12 +439,14 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
               ) : (
                 <p className="text-gray-500">No take requests yet.</p>
               )}
+              </div>
             </div>
           </>
         )}
         {mode === 'swap' && (
         <div className="mt-6">
           <h3 className="font-semibold mb-2">Swap Requests</h3>
+           <div className="max-h-40 overflow-y-auto pr-1">
           {allRelevantRequests.length > 0 ? (
             <ul className="list-disc list-inside text-sm space-y-2">
               {allRelevantRequests.map((req, idx) => {
@@ -485,6 +488,7 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
           ) : (
             <p className="text-gray-500">No swap requests to display.</p>
           )}
+          </div>
         </div>
         )}
         <div className="mt-6 flex justify-end gap-2">

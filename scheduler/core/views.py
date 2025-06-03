@@ -1014,3 +1014,21 @@ class ShiftTakeCancelView(APIView):
         take.delete()
         return Response({"message": "Take request cancelled."})
 
+from .serializers import ScheduleCreateSerializer
+
+class ScheduleEditView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            schedule = Schedule.objects.get(pk=pk)
+        except Schedule.DoesNotExist:
+            return Response({'detail': 'Schedule not found.'}, status=404)
+
+        serializer = ScheduleCreateSerializer(schedule, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            full_data = ScheduleListSerializer(schedule, context={'request': request}).data
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
+

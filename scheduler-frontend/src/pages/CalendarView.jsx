@@ -11,6 +11,8 @@ import ScheduleCreateModal from '../components/ScheduleCreateModal';
 import ShiftSwapModal from '../components/ShiftSwapModal';
 import InboxIcon from '../components/InboxIcon';
 import InboxModal from '../components/InboxModal';
+import ScheduleCard from '../components/ScheduleCard';
+
 
 export default function CalendarView() {
   const { id } = useParams();
@@ -33,11 +35,17 @@ export default function CalendarView() {
   const [allShiftsRaw, setAllShiftsRaw] = useState([]);
   const [visibleShifts, setVisibleShifts] = useState([]); // Filtered shifts for display in calendar
   const [unreadCount, setUnreadCount] = useState(0);
+  const [editingSchedule, setEditingSchedule] = useState(null);
 
 
   useEffect(() => {
-    refreshShifts();
-  }, [activeSchedule, shiftFilter, selectedMemberIds]);
+    if (activeSchedule?.id) {
+      refreshShifts(activeSchedule);
+    }
+  }, [activeSchedule?.id, activeSchedule?.start_date, activeSchedule?.end_date, shiftFilter, selectedMemberIds]);
+
+
+
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -54,80 +62,80 @@ export default function CalendarView() {
   }, [showInbox]);
 
 
-  const refreshShifts = async (scheduleOverride = activeSchedule) => {
-  if (!activeSchedule) return;
-  try {
-    const [shiftsRes, currentUserRes] = await Promise.all([
-    axios.get(`/api/schedules/${activeSchedule.id}/shifts/`),
-    axios.get('/api/user/')
-  ]);
+  const refreshShifts = async (schedule = activeSchedule) => {
+    if (!schedule || !schedule.id) return;
 
-  const rawShifts = shiftsRes.data.map((shift) => {
-    const date = new Date(shift.start_time);
-    const shiftDate = date.toISOString().split('T')[0];
-    return {
-      ...shift,
-      shiftDate
-    };
-  });
+    try {
+      const [shiftsRes, currentUserRes] = await Promise.all([
+        axios.get(`/api/schedules/${schedule.id}/shifts/`),
+        axios.get('/api/user/')
+      ]);
 
+      const rawShifts = shiftsRes.data.map((shift) => {
+        const date = new Date(shift.start_time);
+        const shiftDate = date.toISOString().split('T')[0];
+        return {
+          ...shift,
+          shiftDate
+        };
+      });
 
-  const userId = currentUserRes.data.id;
-  setCurrentUserId(userId);
+      const userId = currentUserRes.data.id;
+      setCurrentUserId(userId);
 
-  const userShiftDates = new Set(
-    rawShifts.filter(s => s.employee === userId).map(s => s.shiftDate)
-  );
+      const userShiftDates = new Set(
+        rawShifts.filter(s => s.employee === userId).map(s => s.shiftDate)
+      );
 
-  const filtered = rawShifts.filter((shift) => {
-    const { shiftDate } = shift;
-    const include =
-      shiftFilter === 'mine' ? shift.employee === userId :
-      shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
-      shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
-      shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
-      true;
-    return include;
-  });
+      const filtered = rawShifts.filter((shift) => {
+        const { shiftDate } = shift;
+        const include =
+          shiftFilter === 'mine' ? shift.employee === userId :
+          shiftFilter === 'selected' ? selectedMemberIds.includes(shift.employee) :
+          shiftFilter === 'daysIWork' ? userShiftDates.has(shiftDate) :
+          shiftFilter === 'daysIDontWork' ? !userShiftDates.has(shiftDate) :
+          true;
+        return include;
+      });
 
-  setVisibleShifts(filtered);
+      setVisibleShifts(filtered);
 
-  const formatted = filtered.map((shift) => {
-    const start = new Date(shift.start_time);
-    const end = new Date(shift.end_time);
+      const formatted = filtered.map((shift) => {
+        const start = new Date(shift.start_time);
+        const end = new Date(shift.end_time);
 
-    const formatTime = (time) => {
-      const hours = time.getHours();
-      const minutes = time.getMinutes();
-      return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
-    };
+        const formatTime = (time) => {
+          const hours = time.getHours();
+          const minutes = time.getMinutes();
+          return minutes === 0 ? `${hours}` : `${hours}:${String(minutes).padStart(2, '0')}`;
+        };
 
-    const viewType = calendarRef.current?.getApi().view.type;
-    const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
-    const startStr = formatTime(start);
-    const endStr = formatTime(end);
-    const timeStr = showAMPM
-      ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-      : `${startStr} - ${endStr}`;
+        const viewType = calendarRef.current?.getApi().view.type;
+        const showAMPM = viewType !== 'timeGridWeek' && viewType !== 'timeGridDay';
+        const startStr = formatTime(start);
+        const endStr = formatTime(end);
+        const timeStr = showAMPM
+          ? `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+          : `${startStr} - ${endStr}`;
 
-    const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
-    return {
-      id: shift.id,
-      title: `${fullName}\n${timeStr}`,
-      start,
-      end,
-      backgroundColor: shift.color || '#8b5cf6',
-      textColor: 'white',
-      extendedProps: { shiftData: shift },
-      allDay: false
-    };
-  });
+        const fullName = `${(shift.employee_first_name || '')} ${(shift.employee_last_name || '')}`.trim() || shift.employee_name || shift.employee || 'Unknown';
+        return {
+          id: shift.id,
+          title: `${fullName}\n${timeStr}`,
+          start,
+          end,
+          backgroundColor: shift.color || '#8b5cf6',
+          textColor: 'white',
+          extendedProps: { shiftData: shift },
+          allDay: false
+        };
+      });
+      setEvents(() => [...formatted]);
+    } catch (err) {
+      console.error('Error refreshing shifts', err);
+    }
+  };
 
-  setEvents(formatted);
-  } catch (err) {
-    console.error('Error refreshing shifts', err);
-  }
-};
 
   useEffect(() => {
     const fetchData = async () => {
@@ -412,47 +420,22 @@ export default function CalendarView() {
           <ul className="space-y-2">
             {schedules.map((schedule) => (
               <li key={schedule.id}>
-                <button
-                  onClick={() => handleScheduleSelect(schedule)}
-                  className={`w-full text-left px-3 py-2 rounded ${
-                    activeSchedule?.id === schedule.id
-                      ? 'bg-purple-500 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-black dark:text-white'
-                  }`}
-                >
-                  <div className="flex flex-col items-start">
-                    {schedule.name ? (
-                      <>
-                        <div className="font-semibold">{schedule.name}</div>
-                        <div>
-                          {new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()} -{' '}
-                          {new Date(schedule.end_date + 'T00:00:00').toLocaleDateString()}
-                        </div>
-                      </>
-                    ) : (
-                      <div>
-                        {new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()} -{' '}
-                        {new Date(schedule.end_date + 'T00:00:00').toLocaleDateString()}
-                      </div>
-                    )}
-                  </div>
-                </button>
+                <ScheduleCard
+                  key={schedule.id + schedule.name + schedule.start_date + schedule.end_date}
+                  schedule={schedule}
+                  isActive={activeSchedule?.id === schedule.id}
+                  onSelect={handleScheduleSelect}
+                  isAdmin={isCalendarAdmin}
+                  onEdit={(s) => {
+                    setEditingSchedule(s);
+                    setShowScheduleModal(true);
+                  }}
+                />
               </li>
             ))}
           </ul>
         </div>
       </div>
-
-      {showShiftModal && (
-        <ShiftCreateModal
-          isOpen={showShiftModal}
-          onClose={() => setShowShiftModal(false)}
-          calendarId={id}
-          scheduleId={activeSchedule?.id}
-          selectedDate={selectedDate}
-          members={members}
-        />
-      )}
 
       {showShiftModal && (
         <ShiftCreateModal
@@ -492,20 +475,39 @@ export default function CalendarView() {
       {showScheduleModal && (
         <ScheduleCreateModal
           isOpen={showScheduleModal}
-          onClose={() => setShowScheduleModal(false)}
+          onClose={() => {
+            setShowScheduleModal(false);
+            setEditingSchedule(null);
+          }}
+          calendarId={id}
+          mode={editingSchedule ? 'edit' : 'create'}
+          existingSchedule={editingSchedule}
           onCreate={(schedule) => {
-            setActiveSchedule(schedule);
             setSchedules(prev => [...prev, schedule]);
             setActiveSchedule(schedule);
             const newDate = new Date(schedule.start_date + 'T00:00:00');
             setCurrentDate(newDate);
             if (calendarRef.current) {
-              const calendarApi = calendarRef.current.getApi();
-              calendarApi.gotoDate(newDate);
+              calendarRef.current.getApi().gotoDate(newDate);
             }
-            setShowScheduleModal(false);
           }}
-          calendarId={id}
+          onUpdate={async (updated) => {
+          try {
+            const res = await axios.get(`/api/schedules/`, { params: { calendar_id: id } });
+            setSchedules(res.data);
+            const fresh = res.data.find(s => s.id === updated.id);
+            if (fresh) {
+              setActiveSchedule(fresh);
+              const newDate = new Date(fresh.start_date + 'T00:00:00');
+              setCurrentDate(newDate);
+              if (calendarRef.current) {
+                calendarRef.current.getApi().gotoDate(newDate);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to refresh schedules after update", err);
+          }
+        }}
         />
       )}
     </div>

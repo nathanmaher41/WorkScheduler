@@ -42,6 +42,7 @@ from .views import (
     CalendarShiftListView,
     ShiftSwapCancelView,
     ShiftTakeCancelView,
+    ScheduleEditView,
 )
 
 
@@ -92,6 +93,7 @@ urlpatterns = [
     path('calendars/<int:calendar_id>/shifts/', CalendarShiftListView.as_view()),
     path('swap/cancel/<int:swap_id>/', ShiftSwapCancelView.as_view(), name='swap-cancel'),
     path('take/cancel/<int:take_id>/', ShiftTakeCancelView.as_view(), name='take-cancel'),
+    path('schedules/<int:pk>/edit/', ScheduleEditView.as_view()),
 
 
 ]

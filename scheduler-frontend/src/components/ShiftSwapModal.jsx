@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
+import ShiftCreateModal from './ShiftCreateModal';
 
-export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete }) {
+export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete, isAdmin }) {
   const [yourShifts, setYourShifts] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [memberShifts, setMemberShifts] = useState([]);
@@ -12,8 +13,10 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
   const [successMessage, setSuccessMessage] = useState('');
   const [isOwnShift, setIsOwnShift] = useState(false);
   const [mode, setMode] = useState('swap'); // 'swap' or 'take'
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
+    console.log("ShiftSwapModal isAdmin:", isAdmin);
     setIsOwnShift(shift?.employee === currentUserId);
   }, [shift, currentUserId]);
 
@@ -240,11 +243,44 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
 
 
   if (!isOpen || !shift) return null;
-
+  if (isEditing) {
+    return (
+      <ShiftCreateModal
+      isOpen={true}
+      onClose={() => setIsEditing(false)}
+      existingShift={shift}
+      mode="edit"
+      members={members}
+      selectedDate={new Date(shift.start_time)}
+      onShiftSaved={(updatedShift) => {
+        setIsEditing(false);
+        // update modal shift in-place so user sees it live
+        shift.start_time = updatedShift.start_time;
+        shift.end_time = updatedShift.end_time;
+        shift.employee = updatedShift.employee;
+        shift.employee_name = updatedShift.employee_name;
+        shift.position = updatedShift.position;
+        if (onSwapComplete) onSwapComplete(); // trigger calendar re-render
+        onClose(); 
+      }}
+    />
+    );
+  }
+  else{
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Shift Details</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-black dark:text-white">Shift Details</h2>
+          {isAdmin && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+            >
+              Edit Shift
+            </button>
+          )}
+        </div>
         <p><strong>Employee:</strong> {shift.employee_name}</p>
         <p><strong>Date:</strong> {formatDate(shift.start_time)}</p>
         <p><strong>Start:</strong> {formatTime(shift.start_time)}</p>
@@ -466,4 +502,5 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
       </div>
     </div>
   );
+}
 }

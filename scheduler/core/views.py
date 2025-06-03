@@ -921,7 +921,6 @@ class InboxUnreadCountView(APIView):
             qs = qs.filter(calendar_id=calendar_id)
         return Response({"unread_count": qs.count()})
 
-
 class InboxNotificationDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -949,6 +948,14 @@ class ShiftDetailView(APIView):
         from .serializers import ShiftSerializer
         serializer = ShiftSerializer(shift)
         return Response(serializer.data)
+
+    def patch(self, request, pk):
+        shift = get_object_or_404(Shift, pk=pk)
+        serializer = ShiftSerializer(shift, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # views.py
 class CalendarShiftListView(APIView):

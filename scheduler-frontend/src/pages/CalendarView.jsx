@@ -347,6 +347,7 @@ export default function CalendarView() {
               currentUserId={currentUserId}
               members={members}
               onSwapComplete={refreshShifts}
+              isAdmin={isCalendarAdmin}
             />
           )}
         </div>

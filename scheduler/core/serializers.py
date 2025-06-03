@@ -91,7 +91,7 @@ class ScheduleMemberSerializer(serializers.ModelSerializer):
 
 class ShiftSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField()
-    employee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    employee = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
     schedule = serializers.PrimaryKeyRelatedField(read_only=True)
     color = serializers.SerializerMethodField()
 
@@ -114,8 +114,6 @@ class ShiftSerializer(serializers.ModelSerializer):
             return membership.color
         except CalendarMembership.DoesNotExist:
             return "#8b5cf6"  # fallback
-
-
 
 class TimeOffRequestCreateSerializer(serializers.ModelSerializer):
     class Meta:

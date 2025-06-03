@@ -9,7 +9,10 @@ export default function ShiftCreateModal({
   calendarId,
   scheduleId,
   selectedDate,
-  members
+  members,
+  existingShift = null,
+  mode = 'create',
+  onShiftSaved = () => {}
 }) {
   const [employee, setEmployee] = useState('');
   const [startHourMinute, setStartHourMinute] = useState('');
@@ -32,7 +35,36 @@ export default function ShiftCreateModal({
       setRole('');
       setNotes('');
     }
-  }, [isOpen]);
+    if (mode === 'edit' && existingShift) {
+      setEmployee(existingShift.employee?.toString() || '');
+      const start = new Date(existingShift.start_time);
+      const end = new Date(existingShift.end_time);
+
+      let sh = start.getHours(), sm = start.getMinutes();
+      let eh = end.getHours(), em = end.getMinutes();
+
+      setStartPeriod(sh >= 12 ? 'PM' : 'AM');
+      setEndPeriod(eh >= 12 ? 'PM' : 'AM');
+
+      sh = sh % 12 || 12;
+      eh = eh % 12 || 12;
+
+      setStartHourMinute(`${sh}:${sm.toString().padStart(2, '0')}`);
+      setEndHourMinute(`${eh}:${em.toString().padStart(2, '0')}`);
+
+      setRole(existingShift.position || '');
+      setNotes(existingShift.notes || '');
+    } else {
+      // reset for create mode
+      setEmployee('');
+      setStartHourMinute('');
+      setEndHourMinute('');
+      setStartPeriod('AM');
+      setEndPeriod('PM');
+      setRole('');
+      setNotes('');
+    }
+  }, [isOpen, mode, existingShift]);
 
   const handleEmployeeChange = (e) => {
     const employeeId = e.target.value;
@@ -74,28 +106,72 @@ export default function ShiftCreateModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      const { hours: startH, minutes: startM } = convertTo24Hour(startHourMinute.includes(':') ? startHourMinute : `${startHourMinute}:00`, startPeriod);
-      const { hours: endH, minutes: endM } = convertTo24Hour(endHourMinute.includes(':') ? endHourMinute : `${endHourMinute}:00`, endPeriod);
 
+    try {
+      if (!selectedDate) {
+        alert('No date selected for the shift.');
+        return;
+      }
+
+      const normalizeTime = (timeStr) => {
+        const trimmed = timeStr.trim();
+        if (trimmed === '') return null;
+        if (!trimmed.includes(':')) return `${trimmed}:00`;
+        if (trimmed.endsWith(':')) return `${trimmed}00`;
+        return trimmed;
+      };
+
+      const startRaw = normalizeTime(startHourMinute);
+      const endRaw = normalizeTime(endHourMinute);
+
+      if (!startRaw || !endRaw) {
+        alert('Please enter valid start and end times.');
+        return;
+      }
+
+      const { hours: startH, minutes: startM } = convertTo24Hour(startRaw, startPeriod);
+      const { hours: endH, minutes: endM } = convertTo24Hour(endRaw, endPeriod);
+
+      if ([startH, startM, endH, endM].some((val) => isNaN(val))) {
+        alert('Please enter a valid time.');
+        return;
+      }
 
       const start = new Date(selectedDate);
+      if (isNaN(start.getTime())) {
+        throw new RangeError('Invalid start date');
+      }
       start.setHours(startH, startM, 0, 0);
 
       const end = new Date(selectedDate);
+      if (isNaN(end.getTime())) {
+        throw new RangeError('Invalid end date');
+      }
       end.setHours(endH, endM, 0, 0);
 
-      const res = await axios.post(`/api/schedules/${scheduleId}/shifts/create/`, {
-        employee,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        position: role,
-        notes
+      const res = await axios({
+        method: mode === 'edit' ? 'patch' : 'post',
+        url:
+          mode === 'edit'
+            ? `/api/shifts/${existingShift.id}/`
+            : `/api/schedules/${scheduleId}/shifts/create/`,
+        data: {
+          employee,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          position: role,
+          notes,
+        },
       });
-      onCreate(res.data);
+      if (mode === 'edit') {
+        onShiftSaved(res.data);
+      } else {
+        onCreate(res.data);
+      }
+
       onClose();
     } catch (err) {
-      console.error('Failed to create shift', err);
+      console.error('Failed to save shift', err);
       alert('Something went wrong.');
     }
   };

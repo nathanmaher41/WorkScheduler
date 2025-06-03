@@ -7,7 +7,7 @@ import UserSettingsModal from '../components/UserSettingsModal';
 import InboxModal from '../components/InboxModal';
 import InboxIcon from '../components/InboxIcon';
 import SettingsIcon from '../components/SettingsIcon';
-import CalendarIcon from '../components/CalendarIcon';
+import CalendarIcon from '../components/CalendarIcon.jsx';
 import DashboardInboxModal from '../components/DashboardInboxModal';
 
 
@@ -110,6 +110,26 @@ export default function Dashboard() {
        }
        return (a.full_name || a.username).localeCompare(b.full_name || b.username);
    });
+
+   const handleCalendarRename = async (calendarId, newName) => {
+        try {
+            await axios.patch(`/api/calendars/${calendarId}/`, { name: newName });
+
+            // Refresh calendar list
+            const res = await axios.get('/api/calendars/');
+            setCalendars(res.data);
+
+            // Force select calendar again by ID
+            const updated = res.data.find(cal => cal.id === calendarId);
+            if (updated) {
+            setSelectedCalendar(null); // 👈 force change
+            setTimeout(() => setSelectedCalendar(updated), 0); // 👈 trigger useEffect
+            }
+        } catch (err) {
+            console.error('Failed to rename calendar:', err);
+            alert('Failed to rename calendar');
+        }
+        };
 
    return (
        <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
@@ -254,6 +274,8 @@ export default function Dashboard() {
                                setSelectedCalendar(calendar);
                                setOpenMenuId(null);
                            }}
+                           isAdmin={isCurrentUserAdmin}
+                           onRename={handleCalendarRename}
                            onDelete={isCurrentUserAdmin ? handleDeleteCalendar : null}
                            onShare={(calendar) => alert(`Share link or message for ${calendar.name}`)}
                        />

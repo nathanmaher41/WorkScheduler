@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from .permissions import IsScheduleAdmin
 from django.utils.timezone import localtime
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
 from .models import (
     Schedule, 
     ScheduleMembership, 
@@ -18,7 +19,8 @@ from .models import (
     CalendarRole, 
     ShiftSwapRequest,
     ShiftTakeRequest,
-    InboxNotification
+    InboxNotification,
+    WorkplaceHoliday,
 )
 from .serializers import (
     RegisterSerializer,
@@ -38,7 +40,9 @@ from .serializers import (
     CalendarMembershipSimpleSerializer,
     ShiftSwapRequestSerializer,
     ShiftTakeRequestSerializer,
-    InboxNotificationSerializer
+    InboxNotificationSerializer,
+    TimeOffRequestSerializer,
+    WorkplaceHolidaySerializer
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -623,8 +627,16 @@ class CalendarJoinByCodeView(APIView):
 
         return Response({"message": f"Joined calendar: {calendar.name}"})
 
+# class CalendarMemberListView(generics.ListAPIView):
+#     serializer_class = CalendarMembershipSimpleSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def get_queryset(self):
+#         calendar_id = self.kwargs['calendar_id']
+#         return CalendarMembership.objects.filter(calendar_id=calendar_id)
+
 class CalendarMemberListView(generics.ListAPIView):
-    serializer_class = CalendarMembershipSimpleSerializer
+    serializer_class = CalendarMembershipSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
@@ -1032,3 +1044,67 @@ class ScheduleEditView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=400)
 
+class ScheduleDeleteView(APIView):
+    permission_classes = [IsAuthenticated, IsScheduleAdmin]
+
+    def delete(self, request, pk):
+        try:
+            schedule = Schedule.objects.get(id=pk)
+        except Schedule.DoesNotExist:
+            return Response({'error': 'Schedule not found.'}, status=404)
+
+        self.check_object_permissions(request, schedule)
+        schedule.delete()
+        return Response({"message": "Schedule deleted."}, status=204)
+
+class ShiftDeleteView(generics.DestroyAPIView):
+    queryset = Shift.objects.all()
+    serializer_class = ShiftSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class RequestOffCreateView(APIView):
+    def post(self, request, calendar_id):
+        serializer = TimeOffRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(employee=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class TimeOffListView(ListAPIView):
+    serializer_class = TimeOffRequestSerializer
+
+    def get_queryset(self):
+        return TimeOffRequest.objects.filter(status__in=['pending', 'approved'])
+
+class TimeOffRequestDeleteView(generics.DestroyAPIView):
+    queryset = TimeOffRequest.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.employee != request.user:
+            return Response({"detail": "You can only delete your own requests."}, status=status.HTTP_403_FORBIDDEN)
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class WorkplaceHolidayListCreateView(generics.ListCreateAPIView):
+    serializer_class = WorkplaceHolidaySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        calendar_id = self.kwargs['calendar_id']
+        return WorkplaceHoliday.objects.filter(calendar_id=calendar_id)
+
+    def perform_create(self, serializer):
+        calendar_id = self.kwargs['calendar_id']
+        serializer.save(calendar_id=calendar_id)
+
+class WorkplaceHolidayDeleteView(generics.DestroyAPIView):
+    serializer_class = WorkplaceHolidaySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+
+    def get_queryset(self):
+        calendar_id = self.kwargs['calendar_id']
+        return WorkplaceHoliday.objects.filter(calendar_id=calendar_id)

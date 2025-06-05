@@ -43,6 +43,15 @@ from .views import (
     ShiftSwapCancelView,
     ShiftTakeCancelView,
     ScheduleEditView,
+    ScheduleDeleteView,
+    ShiftDeleteView,
+    RequestOffCreateView,
+    TimeOffListView,
+    TimeOffRequestDeleteView,
+    WorkplaceHolidayListCreateView,
+    WorkplaceHolidayDeleteView,
+
+    
 )
 
 
@@ -94,6 +103,12 @@ urlpatterns = [
     path('swap/cancel/<int:swap_id>/', ShiftSwapCancelView.as_view(), name='swap-cancel'),
     path('take/cancel/<int:take_id>/', ShiftTakeCancelView.as_view(), name='take-cancel'),
     path('schedules/<int:pk>/edit/', ScheduleEditView.as_view()),
-
+    path('schedules/<int:pk>/delete/', ScheduleDeleteView.as_view(), name='schedule-delete'),
+    path('shifts/<int:pk>/delete/', ShiftDeleteView.as_view(), name='shift-delete'),
+    path('calendars/<int:calendar_id>/request-off/', RequestOffCreateView.as_view()),
+    path('time-off/', TimeOffListView.as_view(), name='time-off-list'),
+    path('calendars/<int:calendar_id>/request-off/<int:pk>/delete/', TimeOffRequestDeleteView.as_view(), name='timeoff-delete'),
+    path('calendars/<int:calendar_id>/holidays/', WorkplaceHolidayListCreateView.as_view(), name='workplaceholiday-list-create'),
+    path('calendars/<int:calendar_id>/holidays/<int:pk>/delete/', WorkplaceHolidayDeleteView.as_view(), name='workplaceholiday-delete'),
 
 ]

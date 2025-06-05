@@ -12,8 +12,11 @@ export default function ShiftCreateModal({
   members,
   existingShift = null,
   mode = 'create',
-  onShiftSaved = () => {}
-}) {
+  onShiftSaved = () => {},
+  timeOffRequests = [],
+  onShiftDeleted = () => {},
+  workplaceHolidays = []
+  }) {
   const [employee, setEmployee] = useState('');
   const [startHourMinute, setStartHourMinute] = useState('');
   const [endHourMinute, setEndHourMinute] = useState('');
@@ -21,6 +24,16 @@ export default function ShiftCreateModal({
   const [endPeriod, setEndPeriod] = useState('PM');
   const [role, setRole] = useState('');
   const [notes, setNotes] = useState('');
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  const selectedStr = new Date(selectedDate).toISOString().split('T')[0];
+
+  const unavailableIds = timeOffRequests
+    .filter((req) =>
+      selectedStr >= req.start_date && selectedStr <= req.end_date
+    )
+    .map((req) => req.employee);
+
 
   const startInputRef = useRef();
   const endInputRef = useRef();
@@ -137,13 +150,14 @@ export default function ShiftCreateModal({
         return;
       }
 
-      const start = new Date(selectedDate);
+      const [year, month, day] = selectedDate.split('-').map(Number);
+      const start = new Date(year, month - 1, day); 
       if (isNaN(start.getTime())) {
         throw new RangeError('Invalid start date');
       }
       start.setHours(startH, startM, 0, 0);
 
-      const end = new Date(selectedDate);
+      const end = new Date(year, month - 1, day);
       if (isNaN(end.getTime())) {
         throw new RangeError('Invalid end date');
       }
@@ -182,6 +196,62 @@ export default function ShiftCreateModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
         <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{mode === 'edit' ? 'Edit Shift' : 'Create Shift'}</h2>
+        {/* {warningMessage && (
+          <div className="mb-4 p-3 rounded bg-yellow-100 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-100 border border-yellow-300 dark:border-yellow-500 text-sm">
+            {warningMessage}
+          </div>
+        )} */}
+        {(() => {
+          if (!selectedDate) return null;
+
+          const selectedStr = new Date(selectedDate).toISOString().split('T')[0];
+
+          const holiday = workplaceHolidays.find(h => {
+            const startStr = new Date(h.date).toISOString().split('T')[0];
+            const endStr = h.end_date
+              ? new Date(h.end_date).toISOString().split('T')[0]
+              : startStr;
+
+            return selectedStr >= startStr && selectedStr <= endStr;
+          });
+
+          if (!holiday) return null;
+
+          const boxClasses = holiday.type === 'custom'
+            ? 'bg-yellow-100 dark:bg-yellow-700 text-yellow-800 dark:text-yellow-100 border border-yellow-300 dark:border-yellow-500'
+            : 'bg-red-100 dark:bg-red-700 text-red-800 dark:text-red-100 border border-red-300 dark:border-red-500';
+
+          const message = (() => {
+            const hasTitle = holiday.title && holiday.title.trim();
+            if (holiday.type === 'custom') {
+              const [h, m] = holiday.start_time.split(':');
+              const startHour = parseInt(h, 10);
+              const startSuffix = startHour >= 12 ? 'PM' : 'AM';
+              const startDisplayHour = startHour % 12 || 12;
+              const start12 = `${startDisplayHour}:${m} ${startSuffix}`;
+
+              const [eh, em] = holiday.end_time.split(':');
+              const endHour = parseInt(eh, 10);
+              const endSuffix = endHour >= 12 ? 'PM' : 'AM';
+              const endDisplayHour = endHour % 12 || 12;
+              const end12 = `${endDisplayHour}:${em} ${endSuffix}`;
+
+              return hasTitle
+                ? `⚠️ ${holiday.title} (${start12} - ${end12}) ${holiday.note ? ' — ' + holiday.note : ''} `
+                : `⚠️ Altered Hours: ${start12} - ${end12} ${holiday.note ? ' — ' + holiday.note : ''}`;
+            }
+
+            return hasTitle
+              ? `${holiday.title}${holiday.note ? ' — ' + holiday.note : ''}`
+              : `🚫 This is a holiday (no work expected)${holiday.note ? ' — ' + holiday.note : ''}`;
+          })();
+
+          return (
+            <div className={`mb-4 p-3 rounded text-sm ${boxClasses}`}>
+              {message}
+            </div>
+          );
+        })()}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Employee</label>
@@ -192,7 +262,16 @@ export default function ShiftCreateModal({
               required
             >
               <option value="">Select...</option>
-              {members.filter(m => m && m.id).map((member) => (
+              {members.filter(m => {
+                if (!m || !m.id) return false;
+                const getDayStr = (date) => date.toISOString().split('T')[0];
+                const isOff = timeOffRequests.some(req => {
+                  if (req.employee !== m.id) return false;
+                  const selectedStr = getDayStr(new Date(selectedDate));
+                  return selectedStr >= req.start_date && selectedStr <= req.end_date;
+                });
+                return !isOff;
+              }).map((member) => (
                 <option key={`emp-${member.id}`} value={member.id}>
                   {member.full_name || member.username}
                 </option>
@@ -265,6 +344,18 @@ export default function ShiftCreateModal({
             />
           </div>
 
+          {mode === 'edit' && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmDelete(true)}
+                className="text-red-600 hover:underline text-sm"
+              >
+                Delete this shift
+              </button>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -282,6 +373,39 @@ export default function ShiftCreateModal({
           </div>
         </form>
       </div>
+      {showConfirmDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h2 className="text-lg font-semibold mb-4 text-black dark:text-white">Delete Shift?</h2>
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+              Are you sure you want to delete this shift? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowConfirmDelete(false)}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-black dark:text-white rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await axios.delete(`/api/shifts/${existingShift.id}/delete/`);
+                    onShiftDeleted(existingShift.id);
+                    onClose();
+                  } catch (err) {
+                    console.error('Failed to delete shift', err);
+                    alert('Something went wrong while deleting.');
+                  }
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import EditCalendarNameModal from './EditCalendarNameModal'; // Make sure path is correct
+import EditCalendarNameModal from './EditCalendarNameModal';
+import ConfirmDeleteCalendarModal from './ConfirmDeleteCalendarModal';
 
 function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMenuOpen, onToggleMenu, isAdmin, onRename }) {
   const navigate = useNavigate();
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const dropdownItemClass = "w-full text-left px-4 py-2 text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600";
 
@@ -63,7 +65,6 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
                 </button>
                 <button
                   onClick={() => {
-                    // calendar settings modal will be wired separately
                     alert('Open settings modal');
                     onToggleMenu();
                   }}
@@ -76,9 +77,7 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
             {onDelete && (
               <button
                 onClick={() => {
-                  if (confirm(`Delete calendar "${calendar.name}"?`)) {
-                    onDelete(calendar.id);
-                  }
+                  setShowDeleteModal(true);
                   onToggleMenu();
                 }}
                 className="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -115,6 +114,14 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
           currentName={calendar.name}
           onRename={onRename}
           onClose={() => setShowEditModal(false)}
+        />
+      )}
+
+      {showDeleteModal && calendar && (
+        <ConfirmDeleteCalendarModal
+          calendarName={calendar.name}
+          onDelete={() => onDelete(calendar.id)}
+          onClose={() => setShowDeleteModal(false)}
         />
       )}
     </div>

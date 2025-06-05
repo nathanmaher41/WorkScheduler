@@ -11,7 +11,8 @@ from .models import(
     CalendarRole, 
     ShiftSwapRequest, 
     ShiftTakeRequest, 
-    InboxNotification
+    InboxNotification,
+    WorkplaceHoliday,
 )
 
 
@@ -174,10 +175,11 @@ class CalendarMembershipSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
     is_admin = serializers.BooleanField(read_only=True)
+    color = serializers.CharField(read_only=True)
 
     class Meta:
         model = CalendarMembership
-        fields = ['id', 'username', 'full_name', 'role', 'is_admin']
+        fields = ['id', 'username', 'full_name', 'role', 'is_admin', 'color']
 
     def get_full_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip()
@@ -328,6 +330,34 @@ class InboxNotificationSerializer(serializers.ModelSerializer):
                 'name': obj.calendar.name
             }
         return None
+
+class TimeOffRequestSerializer(serializers.ModelSerializer):
+    employee_name = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = TimeOffRequest
+        fields = [
+            'id',
+            'employee',
+            'employee_name',
+            'start_date',
+            'end_date',
+            'reason',
+            'status',
+            'created_at',
+        ]
+        read_only_fields = ['employee', 'status', 'created_at']
+
+    def get_employee_name(self, obj):
+        return obj.employee.get_full_name() or obj.employee.username
+
+# serializers.py
+class WorkplaceHolidaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkplaceHoliday
+        fields = ['id', 'calendar', 'date', 'end_date', 'type', 'start_time', 'end_time', 'note', 'title']
+        read_only_fields = ['calendar']
+
 
 
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import ShiftCreateModal from './ShiftCreateModal';
 
-export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete, isAdmin }) {
+export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete, isAdmin, timeOffRequests }) {
   const [yourShifts, setYourShifts] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [memberShifts, setMemberShifts] = useState([]);
@@ -150,6 +150,36 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
       req.requested_by_id === currentUserId
   );
 
+  const shiftDate = shift?.start_time ? new Date(shift.start_time).toISOString().split('T')[0] : null;
+
+  const offMemberIds = timeOffRequests?.length > 0
+    ? timeOffRequests
+        .filter(req => {
+          const start = new Date(req.start_date);
+          const end = new Date(req.end_date);
+          const date = new Date(shiftDate);
+          return date >= start && date <= end;
+        })
+        .map(req => req.employee)
+    : [];
+
+    const targetEmployeeId = shift?.employee;
+
+    const unavailableDates = new Set(
+      timeOffRequests
+        ?.filter(req => req.employee === targetEmployeeId)
+        .flatMap(req => {
+          const start = new Date(req.start_date);
+          const end = new Date(req.end_date);
+          const days = [];
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            days.push(new Date(d).toISOString().split('T')[0]);
+          }
+          return days;
+        }) || []
+    );
+
+    
 
 
   const formatDate = (datetimeStr) => new Date(datetimeStr).toLocaleDateString();
@@ -260,8 +290,12 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
         shift.employee = updatedShift.employee;
         shift.employee_name = updatedShift.employee_name;
         shift.position = updatedShift.position;
-        if (onSwapComplete) onSwapComplete(); // trigger calendar re-render
+        if (onSwapComplete) onSwapComplete();
         onClose(); 
+      }}
+       onShiftDeleted={(deletedId) => {
+        if (onSwapComplete) onSwapComplete();
+        onClose(); // close this modal
       }}
     />
     );
@@ -317,7 +351,9 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                     onChange={e => setSelectedMemberId(e.target.value)}
                   >
                     <option value="">-- Select a Member --</option>
-                    {members.filter(m => m.id !== currentUserId).map(member => (
+                    {members
+                      .filter(m => m.id !== currentUserId && !offMemberIds.includes(m.id))
+                      .map(member => (
                       <option key={member.id} value={member.id}>{member.full_name}</option>
                     ))}
                   </select>
@@ -348,7 +384,12 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                   onChange={e => setSelectedSwapShiftId(e.target.value)}
                 >
                   <option value="">-- Select a Shift --</option>
-                  {yourShifts.filter(s => !usedRequestingShiftIds.has(s.id)).map(s => (
+                  {yourShifts
+                    .filter(s => {
+                      const dateStr = new Date(s.start_time).toISOString().split('T')[0];
+                      return !usedRequestingShiftIds.has(s.id) && !unavailableDates.has(dateStr);
+                    })
+                    .map(s => (
                     <option key={s.id} value={s.id}>
                       {formatDate(s.start_time)}: {formatTime(s.start_time)} - {formatTime(s.end_time)}
                     </option>
@@ -366,7 +407,9 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                 <h3 className="font-semibold mb-2">Request someone to take this shift:</h3>
                 <select className="w-full border p-2 rounded dark:bg-gray-700 dark:text-white" value={selectedMemberId} onChange={e => setSelectedMemberId(e.target.value)}>
                   <option value="">-- Select a Member --</option>
-                  {members.filter(m => m.id !== currentUserId).map(member => (
+                  {members
+                    .filter(m => m.id !== currentUserId && !offMemberIds.includes(m.id))
+                    .map(member => (
                     <option key={member.id} value={member.id} disabled={usedGiveRequestUserIds.has(member.id)}>{member.full_name}</option>
                   ))}
                 </select>

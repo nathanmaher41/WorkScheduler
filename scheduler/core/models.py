@@ -156,3 +156,23 @@ class InboxNotification(models.Model):
     def __str__(self):
         return f"{self.user} - {self.notification_type} - {self.message[:20]}"
 
+# models.py
+class WorkplaceHoliday(models.Model):
+    calendar = models.ForeignKey(Calendar, on_delete=models.CASCADE)
+    date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    type = models.CharField(
+        max_length=10,
+        choices=[
+            ('off', 'Day Off'),
+            ('half', 'Half Day'),
+            ('custom', 'Custom Hours')
+        ]
+    )
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    note = models.TextField(blank=True)
+    title = models.CharField(max_length=100, blank=True)
+
+    def __str__(self):
+        return f"{self.calendar.name} — {self.date} ({self.get_type_display()})"

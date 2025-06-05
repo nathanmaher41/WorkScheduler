@@ -12,6 +12,9 @@ import ShiftSwapModal from '../components/ShiftSwapModal';
 import InboxIcon from '../components/InboxIcon';
 import InboxModal from '../components/InboxModal';
 import ScheduleCard from '../components/ScheduleCard';
+import RequestOffModal from '../components/RequestOffModal';
+import TimeOffModal from '../components/TimeOffModal';
+
 
 
 export default function CalendarView() {
@@ -36,15 +39,31 @@ export default function CalendarView() {
   const [visibleShifts, setVisibleShifts] = useState([]); // Filtered shifts for display in calendar
   const [unreadCount, setUnreadCount] = useState(0);
   const [editingSchedule, setEditingSchedule] = useState(null);
-
+  const [calendarName, setCalendarName] = useState('');
+  const [showRequestOffModal, setShowRequestOffModal] = useState(false);
+  const [timeOffRequests, setTimeOffRequests] = useState([]);
+  const [showTimeOffModal, setShowTimeOffModal] = useState(false);
+  const [selectedTimeOff, setSelectedTimeOff] = useState(null);
+  const [workplaceHolidays, setWorkplaceHolidays] = useState([]);
 
   useEffect(() => {
-    if (activeSchedule?.id) {
+    // if (activeSchedule?.id) {
       refreshShifts(activeSchedule);
-    }
-  }, [activeSchedule?.id, activeSchedule?.start_date, activeSchedule?.end_date, shiftFilter, selectedMemberIds]);
+    //}
+  }, [activeSchedule, shiftFilter, selectedMemberIds]);//[activeSchedule?.id, activeSchedule?.start_date, activeSchedule?.end_date, shiftFilter, selectedMemberIds]);
 
+  const fetchTimeOffs = async () => {
+      try {
+        const res = await axios.get('/api/time-off/');
+        setTimeOffRequests(res.data);
+      } catch (err) {
+        console.error('Failed to fetch time off requests:', err);
+      }
+    };
+  useEffect(() => {
 
+    fetchTimeOffs();
+  }, []);
 
 
   useEffect(() => {
@@ -62,12 +81,18 @@ export default function CalendarView() {
   }, [showInbox]);
 
 
-  const refreshShifts = async (schedule = activeSchedule) => {
-    if (!schedule || !schedule.id) return;
+  const refreshShifts = async (schedule = activeSchedule, timeOffsOverride = null, holidayOverride = null) => {
+    if (!schedule) { // || !schedule.id
+      setVisibleShifts([]);
+      setEvents([]);
+      return;
+    }
 
     try {
       const [shiftsRes, currentUserRes] = await Promise.all([
-        axios.get(`/api/schedules/${schedule.id}/shifts/`),
+        schedule.id
+          ? axios.get(`/api/schedules/${schedule.id}/shifts/`)
+          : Promise.resolve({ data: [] }),
         axios.get('/api/user/')
       ]);
 
@@ -130,38 +155,161 @@ export default function CalendarView() {
           allDay: false
         };
       });
-      setEvents(() => [...formatted]);
+      const parseLocalDate = (str) => {
+        const [year, month, day] = str.split('-').map(Number);
+        return new Date(year, month - 1, day); // ← Local date constructor!
+      };
+      let freshTimeOffs = timeOffsOverride;
+        if (!freshTimeOffs) {
+          try {
+            const res = await axios.get('/api/time-off/');
+            freshTimeOffs = res.data;
+            setTimeOffRequests(res.data);
+          } catch (err) {
+            console.error("Could not load time offs", err);
+            freshTimeOffs = [];
+          }
+        }
+        const timeOffEvents = activeSchedule?.isDefault
+          ? freshTimeOffs.map(req => {
+              const memberColor = req.color || members.find((m) => m.id === req.employee)?.color || '#8b5cf6';
+              return {
+                id: `timeoff-${req.id}`,
+                title: `${req.employee_name || 'Unknown'}\nOff Work`,
+                start: parseLocalDate(req.start_date),
+                end: new Date(parseLocalDate(req.end_date).getTime() + 86400000),
+                allDay: true,
+                backgroundColor: memberColor,
+                textColor: 'white',
+                extendedProps: { type: 'timeoff', timeOffData: { ...req, calendar: id } },
+              };
+            })
+          : [];
+          const to12Hour = (t) => {
+            const [h, m] = t.split(':');
+            const hour = parseInt(h, 10);
+            const suffix = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${m} ${suffix}`;
+          };
+          const holidaysToUse = holidayOverride ?? workplaceHolidays;
+          const holidayEvents = schedule?.isDefault
+            ? holidaysToUse.map((h) => {
+                const holidayDate = parseLocalDate(h.date);
+                const end = h.end_date
+                  ? new Date(parseLocalDate(h.end_date).getTime() + 86400000)
+                  : new Date(holidayDate.getTime() + 86400000);
+
+                const isAltered = h.type === 'custom';
+                const note = h.title?.trim()
+                  ? (isAltered
+                      ? `⚠️ ${h.title}\n${to12Hour(h.start_time)} - ${to12Hour(h.end_time)}`
+                      : `${h.title}\n\u200B`)
+                  : (isAltered
+                      ? `⚠️ Altered Hours:\n${to12Hour(h.start_time)} - ${to12Hour(h.end_time)}`
+                      : '🚫 Holiday\nNo Work');
+
+                return {
+                  id: `holiday-${h.id}`,
+                  title: note,
+                  start: holidayDate,
+                  end: end,
+                  allDay: true,
+                  backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                  textColor: 'white',
+                  extendedProps: {
+                    type: 'holiday',
+                    holidayData: h
+                  }
+                };
+              })
+            : [];
+
+            // const holidayBackgroundEvents = !schedule?.isDefault
+            //   ? holidaysToUse.flatMap((h) => {
+            //       const start = parseLocalDate(h.date);
+            //       const end = h.end_date ? parseLocalDate(h.end_date) : start;
+
+            //       return getDatesInRange(start, end).map((date) => ({
+            //         id: `holiday-highlight-${h.id}-${date.toISOString().split('T')[0]}`,
+            //         start: date,
+            //         end: new Date(date.getTime() + 86400000),
+            //         rendering: 'background',
+            //         backgroundColor: 'rgba(255, 99, 132, 0.25)',
+            //         allDay: true,
+            //       }));
+            //     })
+            //   : [];
+      setEvents(() => [...formatted, ...timeOffEvents, ...holidayEvents]);
     } catch (err) {
       console.error('Error refreshing shifts', err);
     }
   };
 
+  const isWorkplaceHoliday = (date) => {
+    const cell = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    return workplaceHolidays.some(h => {
+      const start = new Date(h.date);
+      const end = h.end_date ? new Date(h.end_date) : new Date(start);
+      end.setDate(end.getDate() + 1); // include the last day
+
+      return cell >= start && cell < end;
+    });
+  };
+
+
+
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [membersRes, userRes, schedulesRes] = await Promise.all([
+        const [membersRes, userRes, schedulesRes, calendarRes, holidaysRes] = await Promise.all([
           axios.get(`/api/calendars/${id}/members/`),
           axios.get('/api/user/'),
           axios.get('/api/schedules/', { params: { calendar_id: id } }),
+          axios.get(`/api/calendars/${id}/`),
+          axios.get(`/api/calendars/${id}/holidays/`),
         ]);
-
+        setCalendarName(calendarRes.data.name);
         setMembers(membersRes.data);
-        setSchedules(schedulesRes.data);
+        const defaultSchedule = {
+          id: null,
+          name: calendarRes.data.name,
+          isDefault: true,
+          start_date: null,
+          end_date: null,
+        };
+        const allSchedules = [defaultSchedule, ...schedulesRes.data];
+        setSchedules(allSchedules);
+        setWorkplaceHolidays(holidaysRes.data);
 
-        if (schedulesRes.data.length > 0 && !activeSchedule) {
-          const defaultSchedule = schedulesRes.data[0];
-          setActiveSchedule(defaultSchedule);
-          const newDate = new Date(defaultSchedule.start_date + 'T00:00:00');
-          setCurrentDate(newDate);
-          if (calendarRef.current) {
-            const calendarApi = calendarRef.current.getApi();
-            calendarApi.gotoDate(newDate);
+        // Only set it if not already set — and use the correct defaultSchedule
+        const savedScheduleId = localStorage.getItem(`selectedScheduleId-${id}`);
+        let initialSchedule = defaultSchedule;
+
+        if (savedScheduleId && savedScheduleId !== 'calendar') {
+          const matched = schedulesRes.data.find(s => String(s.id) === savedScheduleId);
+          if (matched) {
+            initialSchedule = matched;
           }
-
-          // 🧠 Force refresh after setting active schedule
-          await refreshShifts(defaultSchedule);
         }
+
+        setActiveSchedule(initialSchedule);
+
+        // if (schedulesRes.data.length > 0 && !activeSchedule) {
+        //   const defaultSchedule = schedulesRes.data[0];
+        //   setActiveSchedule(defaultSchedule);
+        //   const newDate = new Date(defaultSchedule.start_date + 'T00:00:00');
+        //   setCurrentDate(newDate);
+        //   if (calendarRef.current) {
+        //     const calendarApi = calendarRef.current.getApi();
+        //     calendarApi.gotoDate(newDate);
+        //   }
+
+        //   // 🧠 Force refresh after setting active schedule
+        //   await refreshShifts(defaultSchedule);
+        // }
 
         const currentUserId = userRes.data.id;
         const currentMember = membersRes.data.find((m) => m.id === currentUserId);
@@ -179,18 +327,29 @@ export default function CalendarView() {
   }, [id]);
 
   const handleDateClick = (info) => {
+    const localStr = info.date.toLocaleDateString('en-CA');
+    if (!activeSchedule || activeSchedule.isDefault) {
+    // will become request off later
+      setSelectedDate(localStr);
+      setShowRequestOffModal(true);
+      return;
+    }
     if (!isCalendarAdmin || !activeSchedule) return;
-    setSelectedDate(info.date);
+    setSelectedDate(localStr);
     setShowShiftModal(true);
   };
 
   const handleScheduleSelect = (schedule) => {
+    localStorage.setItem(`selectedScheduleId-${id}`, schedule.id ?? 'calendar');
     setActiveSchedule(schedule);
-    const newDate = new Date(schedule.start_date + 'T00:00:00');
-    setCurrentDate(newDate);
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      calendarApi.gotoDate(newDate);
+
+    if (schedule.start_date) {
+      const newDate = new Date(`${schedule.start_date}T00:00:00`);
+      setCurrentDate(newDate);
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        calendarApi.gotoDate(newDate);
+      }
     }
   };
 
@@ -223,9 +382,19 @@ export default function CalendarView() {
   }
 
   const handleEventClick = (info) => {
-    //console.log("Event clicked!", info);
+    console.log('🧠 clicked event:', info.event.extendedProps);
+    const type = info.event.extendedProps?.type;
+    if (type === 'timeoff') {
+      const request = info.event.extendedProps.timeOffData;
+      setSelectedTimeOff({
+        ...request,
+        calendar: id, // ✅ inject calendar ID from useParams()
+      });
+      setShowTimeOffModal(true);
+      return;
+    }
+
     const shift = info.event.extendedProps.shiftData;
-    console.log("Clicked shift ID:", shift.id);
     setSelectedShift(shift);
     setShowSwapModal(true);
   };
@@ -258,6 +427,32 @@ export default function CalendarView() {
       console.error('Failed to load all calendar shifts:', err);
     }
   };
+
+  const handleDeleteSchedule = async (schedule) => {
+    try {
+      await axios.delete(`/api/schedules/${schedule.id}/delete/`);
+      setSchedules(prev => prev.filter(s => s.id !== schedule.id));
+      if (activeSchedule?.id === schedule.id) {
+        setActiveSchedule(null);
+      }
+    } catch (err) {
+      console.error("Failed to delete schedule", err);
+    }
+  };
+
+  function getDatesInRange(start, end) {
+    const date = new Date(start);
+    const dates = [];
+
+    while (date <= end) {
+      dates.push(new Date(date));
+      date.setDate(date.getDate() + 1);
+    }
+
+    return dates;
+  }
+
+
 
   return (
     <div className="flex p-6 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
@@ -338,11 +533,30 @@ export default function CalendarView() {
               const cellDate = new Date(arg.date);
               cellDate.setHours(0, 0, 0, 0);
               const classes = [];
+
               if (cellDate.getTime() === today.getTime()) {
                 classes.push('!bg-purple-100', 'dark:!bg-purple-200', '!text-black', 'dark:!text-white');
               }
+
               if (isOutOfRange(cellDate)) {
                 classes.push('bg-gray-300', 'dark:bg-gray-600', '!text-white');
+              }
+
+              if (!activeSchedule?.isDefault) {
+                const holiday = workplaceHolidays.find(h => {
+                  const start = new Date(h.date);
+                  const end = h.end_date ? new Date(h.end_date) : new Date(start);
+                  end.setDate(end.getDate() + 1);
+                  return cellDate >= start && cellDate < end;
+                });
+
+                if (holiday) {
+                  if (holiday.type === 'custom') {
+                    classes.push('altered-cell');
+                  } else if (holiday.type === 'off') {
+                    classes.push('holiday-cell');
+                  }
+                }
               }
               return classes;
             }}
@@ -356,6 +570,7 @@ export default function CalendarView() {
               members={members}
               onSwapComplete={refreshShifts}
               isAdmin={isCalendarAdmin}
+              timeOffRequests={timeOffRequests}
             />
           )}
         </div>
@@ -430,6 +645,7 @@ export default function CalendarView() {
                     setEditingSchedule(s);
                     setShowScheduleModal(true);
                   }}
+                  onDelete={handleDeleteSchedule}
                 />
               </li>
             ))}
@@ -442,9 +658,11 @@ export default function CalendarView() {
           isOpen={showShiftModal}
           onClose={() => setShowShiftModal(false)}
           calendarId={id}
+          timeOffRequests={timeOffRequests}
           scheduleId={activeSchedule?.id}
           selectedDate={selectedDate}
           members={members}
+          workplaceHolidays={workplaceHolidays}
           onCreate={(newShift) => {
             const start = new Date(newShift.start_time);
             const end = new Date(newShift.end_time);
@@ -472,6 +690,43 @@ export default function CalendarView() {
           calendarId={id}
         />
       )}
+      {showRequestOffModal && (
+        <RequestOffModal
+          isOpen={showRequestOffModal}
+          onClose={() => setShowRequestOffModal(false)}
+          calendarId={id}
+          isAdmin={isCalendarAdmin}
+          onRequestSubmitted={async (updatedHolidays = null) => {
+          const timeOffRes = await axios.get('/api/time-off/');
+            setTimeOffRequests(timeOffRes.data);
+            if (updatedHolidays) {
+              setWorkplaceHolidays(updatedHolidays);
+              await refreshShifts(activeSchedule, timeOffRes.data, updatedHolidays); // ✅ ensure fresh data flows through
+            } else {
+              await refreshShifts(activeSchedule, timeOffRes.data);
+            }
+          }}
+          selectedDate={selectedDate}
+        />
+      )}
+      {showTimeOffModal && selectedTimeOff && (
+        <TimeOffModal
+          calendarId={id}
+          isOpen={showTimeOffModal}
+          onClose={() => {
+            setShowTimeOffModal(false);
+            setSelectedTimeOff(null);
+          }}
+          timeOff={selectedTimeOff}
+          currentUserId={currentUserId}
+          onDelete={async () => {
+            setShowTimeOffModal(false);
+            const res = await axios.get('/api/time-off/');
+            setTimeOffRequests(res.data);
+            await refreshShifts(activeSchedule, res.data);
+          }}
+        />
+      )}
       {showScheduleModal && (
         <ScheduleCreateModal
           isOpen={showScheduleModal}
@@ -494,7 +749,9 @@ export default function CalendarView() {
           onUpdate={async (updated) => {
           try {
             const res = await axios.get(`/api/schedules/`, { params: { calendar_id: id } });
-            setSchedules(res.data);
+            // setSchedules(res.data);
+            const defaultSchedule = schedules.find(s => s.id === null);
+            setSchedules([defaultSchedule, ...res.data]);
             const fresh = res.data.find(s => s.id === updated.id);
             if (fresh) {
               setActiveSchedule(fresh);

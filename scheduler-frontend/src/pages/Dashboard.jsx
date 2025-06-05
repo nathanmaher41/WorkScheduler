@@ -9,6 +9,8 @@ import InboxIcon from '../components/InboxIcon';
 import SettingsIcon from '../components/SettingsIcon';
 import CalendarIcon from '../components/CalendarIcon.jsx';
 import DashboardInboxModal from '../components/DashboardInboxModal';
+import ConfirmDeleteCalendarModal from '../components/ConfirmDeleteCalendarModal';
+
 
 
 export default function Dashboard() {

@@ -52,5 +52,26 @@
   background-color: rgba(75, 85, 99, 0.6); /* Tailwind gray-600 */
 }
 
+/* .holiday-cell {
+  background-color: rgba(255, 99, 132, 0.2) !important;
+} */
+
+@media (prefers-color-scheme: dark) {
+  .holiday-cell {
+    background-color: rgba(255, 99, 132, 0.3) !important; /* red tint */
+  }
+  .altered-cell {
+    background-color: rgba(255, 215, 0, 0.25) !important; /* yellow tint */
+  }
+}
+
+/* @media (prefers-color-scheme: light) {
+  .holiday-cell {
+    background-color: rgba(255, 99, 132, 0.15) !important;
+  }
+  .altered-cell {
+    background-color: rgba(255, 215, 0, 0.15) !important;
+  }
+} */
 
 

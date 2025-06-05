@@ -9,6 +9,8 @@
 - [x] Shift creation per schedule
 - [x] Admin permissions on schedules
 - [x] Swap request & approval system (basic)
+- [x] edit calendars, schedules, and shifts
+- [x] delete calendars, schedules, and shifts
 
 ---
 
@@ -104,3 +106,5 @@ What to put in settings modal for calendar:
 logging in with username or email
 MOBILE CANT GET PAST LOGIN!!
 When creating a schedule and clicking a start date in a different month, end date should update to that month not go back to current date
+
+NEXT TODO: Cancel/Delete your OWN time off request.

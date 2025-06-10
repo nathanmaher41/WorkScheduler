@@ -50,7 +50,10 @@ from .views import (
     TimeOffRequestDeleteView,
     WorkplaceHolidayListCreateView,
     WorkplaceHolidayDeleteView,
-
+    CalendarMemberDetailView,
+    CalendarRoleCreateView,
+    CalendarRoleDeleteView,
+    CalendarRoleRenameView,
     
 )
 
@@ -110,5 +113,9 @@ urlpatterns = [
     path('calendars/<int:calendar_id>/request-off/<int:pk>/delete/', TimeOffRequestDeleteView.as_view(), name='timeoff-delete'),
     path('calendars/<int:calendar_id>/holidays/', WorkplaceHolidayListCreateView.as_view(), name='workplaceholiday-list-create'),
     path('calendars/<int:calendar_id>/holidays/<int:pk>/delete/', WorkplaceHolidayDeleteView.as_view(), name='workplaceholiday-delete'),
+    path('calendars/<int:calendar_id>/members/<int:user_id>/', CalendarMemberDetailView.as_view(), name='calendar-member-detail'),
+    path('calendars/<int:calendar_id>/roles/add/', CalendarRoleCreateView.as_view(), name='calendar-role-add'),
+    path('calendars/<int:calendar_id>/roles/<int:role_id>/delete/', CalendarRoleDeleteView.as_view(), name='calendar-role-delete'),
+    path('calendars/<int:calendar_id>/roles/<int:role_id>/rename/', CalendarRoleRenameView.as_view(), name='calendar-role-rename'),
 
 ]

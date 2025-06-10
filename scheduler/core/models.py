@@ -84,17 +84,30 @@ class Calendar(models.Model):
     def generate_join_code():
         chars = string.ascii_uppercase + string.digits
         return ''.join(random.choices(chars, k=6))
+    
     name = models.CharField(max_length=255)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_calendars')
     members = models.ManyToManyField(User, through='CalendarMembership', related_name='calendars')
     join_code = models.CharField(max_length=12, unique=True, default=generate_join_code)
 
+    # 🔧 Add this:
+    self_role_change_allowed = models.BooleanField(default=True)
+
     def __str__(self):
         return self.name
+
+class CalendarPermission(models.Model):
+    codename = models.CharField(max_length=50, unique=True)  # e.g. 'manage_roles'
+    label = models.CharField(max_length=100)  # e.g. 'Can manage roles'
+
+    def __str__(self):
+        return self.label
+
 
 class CalendarRole(models.Model):
     calendar = models.ForeignKey(Calendar, on_delete=models.CASCADE, related_name="roles")
     name = models.CharField(max_length=50)
+    permissions = models.ManyToManyField(CalendarPermission, blank=True)
 
     class Meta:
         unique_together = ('calendar', 'name')
@@ -105,9 +118,10 @@ class CalendarRole(models.Model):
 class CalendarMembership(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     calendar = models.ForeignKey(Calendar, on_delete=models.CASCADE)
-    title = models.ForeignKey(CalendarRole, null=True, blank=True, on_delete=models.SET_NULL)  # display role/title
-    is_admin = models.BooleanField(default=False)  # permission flag
+    title = models.ForeignKey(CalendarRole, null=True, blank=True, on_delete=models.SET_NULL)
+    is_admin = models.BooleanField(default=False)
     color = models.CharField(max_length=7, blank=True, null=True)
+    custom_permissions = models.ManyToManyField(CalendarPermission, blank=True)
 
     class Meta:
         unique_together = ('user', 'calendar')

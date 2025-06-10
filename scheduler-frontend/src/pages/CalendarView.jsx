@@ -13,7 +13,9 @@ import InboxIcon from '../components/InboxIcon';
 import InboxModal from '../components/InboxModal';
 import ScheduleCard from '../components/ScheduleCard';
 import RequestOffModal from '../components/RequestOffModal';
+import SettingsIcon from '../components/SettingsIcon';
 import TimeOffModal from '../components/TimeOffModal';
+import CalendarSettingsModal from '../components/CalendarSettingsModal';
 
 
 
@@ -45,6 +47,11 @@ export default function CalendarView() {
   const [showTimeOffModal, setShowTimeOffModal] = useState(false);
   const [selectedTimeOff, setSelectedTimeOff] = useState(null);
   const [workplaceHolidays, setWorkplaceHolidays] = useState([]);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [calendarRoles, setCalendarRoles] = useState([]);
+  const [calendar, setCalendar] = useState(null);
+
+
 
   useEffect(() => {
     // if (activeSchedule?.id) {
@@ -271,8 +278,10 @@ export default function CalendarView() {
           axios.get(`/api/calendars/${id}/`),
           axios.get(`/api/calendars/${id}/holidays/`),
         ]);
+        setCalendarRoles(calendarRes.data.roles || []);
         setCalendarName(calendarRes.data.name);
         setMembers(membersRes.data);
+        setCalendar(calendarRes.data);
         const defaultSchedule = {
           id: null,
           name: calendarRes.data.name,
@@ -452,6 +461,81 @@ export default function CalendarView() {
     return dates;
   }
 
+  const handleCalendarRename = async (calendarId, newName) => {
+    try {
+      await axios.patch(`/api/calendars/${calendarId}/`, { name: newName });
+      setCalendarName(newName);
+
+      setActiveSchedule(prev =>
+        prev?.isDefault ? { ...prev, name: newName } : prev
+      );
+
+      setSchedules(prev =>
+      prev.map(s => s.isDefault ? { ...s, name: newName } : s)
+    );
+
+    } catch (err) {
+      console.error('Rename failed:', err);
+      throw err;
+    }
+  };
+
+  const handleUpdateColor = async (calendarId, memberId, newColor) => {
+    try {
+      await axios.patch(`/api/calendars/${calendarId}/members/${memberId}/`, {
+        color: newColor,
+      });
+
+      setMembers(prev =>
+        prev.map(m =>
+          m.id === memberId ? { ...m, color: newColor } : m
+        )
+      );
+
+      // 🔁 Refresh shift events so color changes are reflected
+      await refreshShifts();
+    } catch (err) {
+      console.error("Failed to update color:", err);
+      throw err;
+    }
+  };
+
+  const handleUpdateRole = async (calendarId, memberId, titleId) => {
+    try {
+      await axios.patch(`/api/calendars/${calendarId}/members/${memberId}/`, {
+        title: titleId,
+      });
+
+      setMembers(prev =>
+        prev.map(m =>
+          m.id === memberId ? { ...m, title_id: titleId } : m
+        )
+      );
+      await refreshShifts();
+    } catch (err) {
+      console.error("Failed to update role:", err);
+      throw err;
+    }
+  };
+
+  const handleUpdateSettings = async (calendarId, updatedFields) => {
+    try {
+      const res = await axios.patch(`/api/calendars/${calendarId}/`, updatedFields);
+      console.log("we here");
+      console.log("🔁 updated calendar:", res.data);
+      setCalendar(prev => ({
+        ...prev,
+        ...res.data, // update calendar with backend-confirmed values
+      }));
+      //console.log("Saving self_role_change_allowed:", selfRoleChangeAllowed);
+    } catch (err) {
+      console.error('Failed to update calendar settings:', err);
+    }
+  };
+
+
+
+
 
 
   return (
@@ -473,7 +557,7 @@ export default function CalendarView() {
                 </span>
               )}
             </button>
-            <button onClick={() => setShowSettingsModal(true)}>Settings ⚙️</button>
+            <button onClick={() => setShowSettingsModal(true)}><SettingsIcon/></button>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded shadow p-4">
@@ -725,6 +809,21 @@ export default function CalendarView() {
             setTimeOffRequests(res.data);
             await refreshShifts(activeSchedule, res.data);
           }}
+        />
+      )}
+      {showSettingsModal && (
+        <CalendarSettingsModal
+          isOpen={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          calendar={{ id, name: calendarName, ...calendar }}
+          members={members}
+          roles={calendarRoles}
+          currentUserId={currentUserId}
+          onRename={handleCalendarRename}
+          onUpdateColor={handleUpdateColor}
+          onUpdateRole={handleUpdateRole}
+          onUpdateSettings={handleUpdateSettings}
+          currentMember={members.find((m) => m.id === currentUserId)}
         />
       )}
       {showScheduleModal && (

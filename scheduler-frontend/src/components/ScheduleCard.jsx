@@ -12,8 +12,15 @@ export default function ScheduleCard({
   const [showConfirm, setShowConfirm] = useState(false);
   const dropdownRef = useRef(null);
 
-  const startStr = new Date(schedule.start_date + 'T00:00:00').toLocaleDateString();
-  const endStr = new Date(schedule.end_date + 'T00:00:00').toLocaleDateString();
+ // const startStr = new Date(schedule.start_date + 'T00:00:00').toLocaleDateString();
+  //const endStr = new Date(schedule.end_date + 'T00:00:00').toLocaleDateString();
+
+  const startStr = schedule.start_date
+    ? new Date(schedule.start_date + 'T00:00:00').toLocaleDateString()
+    : '';
+  const endStr = schedule.end_date
+    ? new Date(schedule.end_date + 'T00:00:00').toLocaleDateString()
+    : '';
 
   return (
     <div className="relative">
@@ -27,11 +34,11 @@ export default function ScheduleCard({
       >
         <div className="flex flex-col items-start">
           {schedule.name && <div className="font-semibold">{schedule.name}</div>}
-          <div>{startStr} - {endStr}</div>
+          <div>{schedule.isDefault ? 'Main Calendar' : `${startStr} - ${endStr}`}</div>
         </div>
       </button>
 
-      {isAdmin && (
+      {isAdmin && !schedule.isDefault &&  (
         <div className="absolute top-1 right-1">
           <button
             onClick={() => setShowDropdown(!showDropdown)}

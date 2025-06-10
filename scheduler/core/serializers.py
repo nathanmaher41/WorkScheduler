@@ -13,6 +13,7 @@ from .models import(
     ShiftTakeRequest, 
     InboxNotification,
     WorkplaceHoliday,
+    CalendarPermission,
 )
 
 
@@ -176,20 +177,17 @@ class CalendarMembershipSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     is_admin = serializers.BooleanField(read_only=True)
     color = serializers.CharField(read_only=True)
+    title_id = serializers.IntegerField(source='title.id', read_only=True)  # for dropdown selection
 
     class Meta:
         model = CalendarMembership
-        fields = ['id', 'username', 'full_name', 'role', 'is_admin', 'color']
+        fields = ['id', 'username', 'full_name', 'role', 'is_admin', 'color', 'title_id']
 
     def get_full_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip()
 
     def get_role(self, obj):
-        if obj.is_admin and obj.title:
-            return f"ADMIN - {obj.title.name.upper()}"
-        elif obj.is_admin:
-            return "ADMIN"
-        elif obj.title:
+        if obj.title:
             return obj.title.name.upper()
         return "None"
 
@@ -201,10 +199,10 @@ class CalendarRoleSerializer(serializers.ModelSerializer):
 class CalendarSerializer(serializers.ModelSerializer):
     members = CalendarMembershipSerializer(source='calendarmembership_set', many=True, read_only=True)
     roles = CalendarRoleSerializer(many=True, read_only=True)
-
+    self_role_change_allowed = serializers.BooleanField()
     class Meta:
         model = Calendar
-        fields = ['id', 'name', 'join_code', 'members', 'roles']
+        fields = ['id', 'name', 'join_code', 'members', 'roles', 'self_role_change_allowed']
 
 class CalendarJoinSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
@@ -351,18 +349,13 @@ class TimeOffRequestSerializer(serializers.ModelSerializer):
     def get_employee_name(self, obj):
         return obj.employee.get_full_name() or obj.employee.username
 
-# serializers.py
 class WorkplaceHolidaySerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkplaceHoliday
         fields = ['id', 'calendar', 'date', 'end_date', 'type', 'start_time', 'end_time', 'note', 'title']
         read_only_fields = ['calendar']
 
-
-
-
-
-
-
-
-
+class CalendarPermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarPermission
+        fields = ['id', 'codename', 'label']

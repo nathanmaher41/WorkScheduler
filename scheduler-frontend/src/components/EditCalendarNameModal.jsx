@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 export default function EditCalendarNameModal({ calendarId, currentName, onClose, onRename }) {
   const [newName, setNewName] = useState(currentName);
   const [loading, setLoading] = useState(false);
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();

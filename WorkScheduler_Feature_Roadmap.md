@@ -42,9 +42,9 @@
   - [ ] Promote/demote admin status
   - [ ] Toggle "admin swap approval required"
   - [ ] Assign permissions by role group
-- [ ] Prevent shift creation on closed days
-- [ ] Add workplace-wide holidays
-- [ ] Request days off on main calendar
+- [o] Prevent shift creation on closed days
+- [x] Add workplace-wide holidays
+- [x] Request days off on main calendar
 - [ ] Publishing Schedules
 - [x] Inbox
 - [x] Ask for a shift without swapping 
@@ -101,8 +101,9 @@ What to put in settings modal for calendar:
  - giving privelages by role
  - changing your color
  - changing your role
- - admin allowing people to change their role
- - allowing shift swaps without approval from admin
+ - admin allowing people to change their role (default on)
+ - non admin's having the ability to change their role
+ - allowing shift swaps without approval from admin (default no admin approval)
 logging in with username or email
 MOBILE CANT GET PAST LOGIN!!
 When creating a schedule and clicking a start date in a different month, end date should update to that month not go back to current date

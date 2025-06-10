@@ -9,6 +9,7 @@ from .permissions import IsScheduleAdmin
 from django.utils.timezone import localtime
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView
+from rest_framework.exceptions import PermissionDenied
 from .models import (
     Schedule, 
     ScheduleMembership, 
@@ -627,14 +628,6 @@ class CalendarJoinByCodeView(APIView):
 
         return Response({"message": f"Joined calendar: {calendar.name}"})
 
-# class CalendarMemberListView(generics.ListAPIView):
-#     serializer_class = CalendarMembershipSimpleSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def get_queryset(self):
-#         calendar_id = self.kwargs['calendar_id']
-#         return CalendarMembership.objects.filter(calendar_id=calendar_id)
-
 class CalendarMemberListView(generics.ListAPIView):
     serializer_class = CalendarMembershipSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -660,6 +653,21 @@ class CalendarDetailView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied("You do not have permission to delete this calendar.")
         
         instance.delete()
+
+    def update(self, request, *args, **kwargs):
+        calendar = self.get_object()
+        user = request.user
+        is_admin = CalendarMembership.objects.filter(
+            calendar=calendar,
+            user=user,
+            is_admin=True
+        ).exists()
+
+        if not is_admin:
+            raise PermissionDenied("You do not have permission to update this calendar.")
+
+        return super().update(request, *args, **kwargs)
+
 
 class CalendarLookupByCodeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1108,3 +1116,105 @@ class WorkplaceHolidayDeleteView(generics.DestroyAPIView):
     def get_queryset(self):
         calendar_id = self.kwargs['calendar_id']
         return WorkplaceHoliday.objects.filter(calendar_id=calendar_id)
+
+class CalendarMemberDetailView(APIView):
+    def patch(self, request, calendar_id, user_id):
+        try:
+            membership = CalendarMembership.objects.get(calendar_id=calendar_id, user_id=user_id)
+            calendar = Calendar.objects.get(id=calendar_id)
+        except CalendarMembership.DoesNotExist:
+            return Response({'error': 'Membership not found'}, status=404)
+
+        current_user_membership = CalendarMembership.objects.get(calendar_id=calendar_id, user=request.user)
+        is_admin = current_user_membership.is_admin
+        self_change_allowed = calendar.self_role_change_allowed
+
+        # ✅ Only allow if admin or user modifying their own role and self-change is allowed
+        if not (is_admin or (request.user.id == user_id and self_change_allowed)):
+            return Response({'error': 'Permission denied'}, status=403)
+
+        title_id = request.data.get('title')
+        if title_id:
+            try:
+                title = CalendarRole.objects.get(id=title_id)
+                membership.title = title
+            except CalendarRole.DoesNotExist:
+                return Response({'error': 'Invalid title'}, status=400)
+
+        membership.save()
+        return Response(CalendarMembershipSerializer(membership).data)
+
+class CalendarRoleCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, calendar_id):
+        name = request.data.get('name', '').strip()
+        if not name:
+            return Response({"error": "Role name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            calendar = Calendar.objects.get(id=calendar_id)
+        except Calendar.DoesNotExist:
+            return Response({"error": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+        if not is_admin:
+            raise PermissionDenied("Only admins can add roles.")
+
+        role, created = CalendarRole.objects.get_or_create(calendar=calendar, name=name)
+        if not created:
+            return Response({"message": "Role already exists."}, status=status.HTTP_200_OK)
+
+        return Response(CalendarRoleSerializer(role).data, status=status.HTTP_201_CREATED)
+
+class CalendarRoleDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, calendar_id, role_id):
+        try:
+            calendar = Calendar.objects.get(id=calendar_id)
+            print(f"🔍 Found calendar {calendar.id} for delete request")
+            role = CalendarRole.objects.get(id=role_id, calendar=calendar)
+            print(f"🔍 Found role {role.id} for calendar {calendar.id}")
+        except Calendar.DoesNotExist:
+            return Response({"error": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND)
+        except CalendarRole.DoesNotExist:
+            return Response({"error": "Role not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+        if not is_admin:
+            raise PermissionDenied("Only admins can delete roles.")
+
+        member_count = CalendarMembership.objects.filter(calendar=calendar, title=role).count()
+        if member_count > 0:
+            return Response({
+                "error": f"There are {member_count} user(s) with this role and it cannot be deleted. "
+                         f"Have them change to another role first or consider renaming this one."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        role.delete()
+        return Response({"message": "Role deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+class CalendarRoleRenameView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, calendar_id, role_id):
+        try:
+            calendar = Calendar.objects.get(id=calendar_id)
+            role = CalendarRole.objects.get(id=role_id, calendar=calendar)
+        except (Calendar.DoesNotExist, CalendarRole.DoesNotExist):
+            return Response({"error": "Role not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+        if not is_admin:
+            raise PermissionDenied("Only admins can rename roles.")
+
+        new_name = request.data.get('name', '').strip()
+        if not new_name:
+            return Response({"error": "New name required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        role.name = new_name
+        role.save()
+        return Response(CalendarRoleSerializer(role).data)
+
+

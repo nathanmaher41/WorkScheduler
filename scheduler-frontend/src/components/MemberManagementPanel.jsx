@@ -7,7 +7,8 @@ export default function MembershipManagementPanel({
   currentUserId,
   permissions = [],
   roles = [], // passed in from AdminPanel
-}) {
+}) { 
+    //
   const [members, setMembers] = useState([]);
 
   useEffect(() => {

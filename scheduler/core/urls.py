@@ -54,14 +54,27 @@ from .views import (
     CalendarRoleCreateView,
     CalendarRoleDeleteView,
     CalendarRoleRenameView,
-    
+    CalendarPermissionListView,
+    CalendarRolePermissionsUpdateView,
+    CalendarMemberPermissionsUpdateView,
+    CalendarMemberEffectivePermissionsView,
+    WorkplaceHolidayDetailView,
+    CustomLoginView,
+    AdminPendingRequestsView,
+    PendingSwapRequestsView,    
+    PendingTakeRequestsView,
+    CalendarTimeOffApprovalListView,
+    TimeOffApproveView,
+    TimeOffRejectView,
 )
 
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
-    path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('login/', CustomLoginView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('schedules/create/', ScheduleCreateView.as_view(), name='schedule-create'),
     path('schedules/', ScheduleListView.as_view(), name='schedule-list'),
     path('schedules/<int:schedule_id>/invite/', ScheduleInviteView.as_view(), name='schedule-invite'),
@@ -109,13 +122,26 @@ urlpatterns = [
     path('schedules/<int:pk>/delete/', ScheduleDeleteView.as_view(), name='schedule-delete'),
     path('shifts/<int:pk>/delete/', ShiftDeleteView.as_view(), name='shift-delete'),
     path('calendars/<int:calendar_id>/request-off/', RequestOffCreateView.as_view()),
-    path('time-off/', TimeOffListView.as_view(), name='time-off-list'),
+    path('calendars/<int:calendar_id>/timeoff/', TimeOffListView.as_view(), name='calendar-timeoff-list'),
     path('calendars/<int:calendar_id>/request-off/<int:pk>/delete/', TimeOffRequestDeleteView.as_view(), name='timeoff-delete'),
     path('calendars/<int:calendar_id>/holidays/', WorkplaceHolidayListCreateView.as_view(), name='workplaceholiday-list-create'),
     path('calendars/<int:calendar_id>/holidays/<int:pk>/delete/', WorkplaceHolidayDeleteView.as_view(), name='workplaceholiday-delete'),
+    path('calendars/<int:calendar_id>/holidays/<int:pk>/', WorkplaceHolidayDetailView.as_view(), name='holiday-detail'),
     path('calendars/<int:calendar_id>/members/<int:user_id>/', CalendarMemberDetailView.as_view(), name='calendar-member-detail'),
     path('calendars/<int:calendar_id>/roles/add/', CalendarRoleCreateView.as_view(), name='calendar-role-add'),
     path('calendars/<int:calendar_id>/roles/<int:role_id>/delete/', CalendarRoleDeleteView.as_view(), name='calendar-role-delete'),
     path('calendars/<int:calendar_id>/roles/<int:role_id>/rename/', CalendarRoleRenameView.as_view(), name='calendar-role-rename'),
+    path('calendars/permissions/', CalendarPermissionListView.as_view(), name='calendar-permission-list'),
+    path('calendars/<int:calendar_id>/roles/<int:role_id>/permissions/', CalendarRolePermissionsUpdateView.as_view(), name='calendar-role-permission-update'),
+    path('calendars/<int:calendar_id>/members/<int:member_id>/permissions/', CalendarMemberPermissionsUpdateView.as_view(), name='calendar-member-permission-update'),
+    path('calendars/<int:calendar_id>/members/<int:member_id>/effective-permissions/', CalendarMemberEffectivePermissionsView.as_view(), name='calendar-member-effective-permissions',),
+    path('calendars/<int:calendar_id>/admin/requests/', AdminPendingRequestsView.as_view(), name='admin_pending_requests'),
+    path('calendars/<int:calendar_id>/swaps/pending/', PendingSwapRequestsView.as_view(), name='pending_swaps'),
+    path('calendars/<int:calendar_id>/takes/pending/', PendingTakeRequestsView.as_view(), name='pending_takes'),
+    path('calendars/<int:calendar_id>/timeoff/pending/', CalendarTimeOffApprovalListView.as_view()),
+    path('calendars/<int:calendar_id>/timeoff/<int:pk>/approve/', TimeOffApproveView.as_view()),
+    path('calendars/<int:calendar_id>/timeoff/<int:pk>/reject/', TimeOffRejectView.as_view()),
+
+    
 
 ]

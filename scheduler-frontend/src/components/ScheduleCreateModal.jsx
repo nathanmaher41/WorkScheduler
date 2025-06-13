@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from '../utils/axios';
+import DatePicker from 'react-datepicker';
 
 export default function ScheduleCreateModal({
   isOpen,
@@ -53,6 +54,22 @@ export default function ScheduleCreateModal({
     }
   };
 
+  function formatDateLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // useEffect(() => {
+  //   if (startDate && (!endDate || new Date(endDate) < new Date(startDate))) {
+  //     const start = new Date(startDate);
+  //     const defaultEnd = new Date(start);
+  //     defaultEnd.setDate(defaultEnd.getDate() + 6); // 1 week range
+  //     setEndDate(defaultEnd.toISOString().split('T')[0]);
+  //   }
+  // }, [startDate]);
+
   if (!isOpen) return null;
 
   return (
@@ -76,24 +93,44 @@ export default function ScheduleCreateModal({
             <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
               Start Date
             </label>
-            <input
+            <DatePicker
+                selected={startDate ? new Date(startDate + 'T00:00:00') : null}
+                onChange={(date) => {
+                  if (date) setStartDate(formatDateLocal(date));
+                }}
+                dateFormat="MM/dd/yyyy"
+                className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+                placeholderText="Select start date"
+              />
+            {/* <input
               type="date"
               className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               required
-            />
+            /> */}
           </div>
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
               End Date
             </label>
-            <input
+            {/* <input
               type="date"
               className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               required
+            /> */}
+            <DatePicker
+              selected={endDate ? new Date(endDate + 'T00:00:00') : null}
+              onChange={(date) => {
+                if (date) setEndDate(formatDateLocal(date));
+              }}
+              openToDate={startDate ? new Date(startDate + 'T00:00:00') : undefined} // ensures calendar opens near startDate
+              minDate={startDate ? new Date(startDate) : null}          // optional: disallow end before start
+              dateFormat="MM/dd/yyyy"
+              className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+              placeholderText="Select end date"
             />
           </div>
           <div className="flex justify-end gap-2">

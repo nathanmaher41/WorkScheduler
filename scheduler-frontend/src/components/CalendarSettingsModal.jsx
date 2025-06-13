@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import ConfirmDeleteCalendarModal from './ConfirmDeleteCalendarModal';
 import CollapsibleSection from './CollapsibleSection';
 import axios from '../utils/axios';
+import PermissionsPanel from './PermissionsPanel';
+
 
 
 export default function CalendarSettingsModal({ isOpen, onClose, calendar, members, currentUserId, roles = [], onRename, onUpdateColor, onUpdateRole, onUpdateSettings, currentMember }) {
@@ -13,6 +15,7 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
     const [showConfirmDelete, setShowConfirmDelete] = useState(false);
     const [newCalendarName, setNewCalendarName] = useState('');
     const [selfRoleChangeAllowed, setSelfRoleChangeAllowed] = useState(false);
+    const [allowSwapWithoutApproval, setAllowSwapWithoutApproval] = useState(false);
     const [selectedRoleId, setSelectedRoleId] = useState('');
     const [deleteError, setDeleteError] = useState(null);
     const [editingRoleId, setEditingRoleId] = useState(null);
@@ -130,6 +133,8 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
     if (isOpen) {
         setNewCalendarName(calendar.name);
         setSelfRoleChangeAllowed(calendar.self_role_change_allowed);
+        setAllowSwapWithoutApproval(calendar.allow_swap_without_approval);
+        setRequireTakeApproval(calendar.require_take_approval);
     }
     }, [isOpen]);
 
@@ -172,15 +177,12 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
             if (selectedRoleId && selectedRoleId !== currentMember?.title_id) {
                 await onUpdateRole(calendar.id, currentUserId, selectedRoleId);
             }
-            await onUpdateSettings(calendar.id, {
-                self_role_change_allowed: selfRoleChangeAllowed,
-            });
             console.log('✅ Color and/or role updated successfully');
         } catch (err) {
             console.error('Error applying changes:', err);
         }
     };
-
+    console.log(currentMember);
     const selfCanChange = calendar.self_role_change_allowed || currentMember?.is_admin;
 
 
@@ -242,246 +244,6 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
                 ))}
             </select>
         </CollapsibleSection>
-
-       <CollapsibleSection title="Role Management">
-        {/* Add Role Input */}
-        <div className="flex gap-2 items-center mb-3">
-            <input
-            type="text"
-            placeholder="e.g. Floor Supervisor"
-            className="flex-1 border px-3 py-2 rounded dark:bg-gray-700 dark:text-white"
-            value={newRoleName}
-            onChange={(e) => setNewRoleName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRole())}
-            />
-            <button
-            type="button"
-            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-            onClick={handleAddRole}
-            >
-            Add
-            </button>
-        </div>
-
-        {/* Role List */}
-        {localRoles.length > 0 && (
-            <ul className="space-y-1 text-sm text-black dark:text-white">
-            {localRoles.map((role) => (
-                <li
-                    key={role.id}
-                    className="flex justify-between items-center bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded"
-                >
-                    {editingRoleId === role.id ? (
-                    <input
-                        type="text"
-                        value={editedRoleName}
-                        onChange={(e) => setEditedRoleName(e.target.value)}
-                        onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleUpdateRole(role.id);
-                        if (e.key === 'Escape') {
-                            setEditingRoleId(null);
-                            setEditedRoleName('');
-                        }
-                        }}
-                        className="flex-1 mr-2 border rounded px-2 py-1 dark:bg-gray-600 dark:text-white"
-                    />
-                    ) : (
-                    <span>{role.name}</span>
-                    )}
-
-                    <div className="flex gap-2">
-                    {editingRoleId === role.id ? (
-                        <button
-                        onClick={() => handleUpdateRole(role.id)}
-                        className="text-green-600 hover:underline text-xs"
-                        >
-                        Save
-                        </button>
-                    ) : (
-                        <button
-                        onClick={() => handleStartEditRole(role)}
-                        className="text-blue-600 hover:underline text-xs"
-                        >
-                        Edit
-                        </button>
-                    )}
-                    <button
-                        onClick={() => handleRemoveRole(role.id)}
-                        className="text-red-600 hover:underline text-xs"
-                    >
-                        Remove
-                    </button>
-                    </div>
-                </li>
-                ))}
-            </ul>
-        )}
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Rules">
-            <label className="flex items-center gap-2 text-sm text-black dark:text-white mb-2">
-                <input
-                    type="checkbox"
-                    className="accent-purple-600"
-                    checked={selfRoleChangeAllowed}
-                    onChange={async () => {
-                    const newVal = !selfRoleChangeAllowed;
-                    setSelfRoleChangeAllowed(newVal);
-                    try {
-                        await onUpdateSettings(calendar.id, { self_role_change_allowed: newVal });
-                    } catch (err) {
-                        console.error("Failed to update self-role-change:", err);
-                    }
-                    }}
-                />
-                Allow users to change their own role
-            </label>
-            <label className="flex items-center gap-2 text-sm text-black dark:text-white mb-2">
-            <input type="checkbox" className="accent-purple-600" />
-            Allow shift swaps without admin approval
-            </label>
-            <label className="flex items-center gap-2 text-sm text-black dark:text-white">
-            <input
-                type="checkbox"
-                className="accent-purple-600"
-                checked={requireTakeApproval}
-                onChange={() => setRequireTakeApproval(prev => !prev)}
-            />
-            Require admin approval for take shift requests
-            </label>
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Permissions">
-        {/* View Mode Toggle */}
-        <div className="flex space-x-2 mb-4 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
-            {['Members', 'Roles', 'Overview'].map((mode) => (
-            <button
-                key={mode}
-                className={`flex-1 py-2 text-sm font-medium transition ${
-                permissionMode === mode
-                    ? 'bg-white dark:bg-gray-900 text-black dark:text-white'
-                    : 'text-gray-600 dark:text-gray-300'
-                }`}
-                onClick={() => setPermissionMode(mode)}
-            >
-                {mode}
-            </button>
-            ))}
-        </div>
-
-        {/* Selector Dropdown */}
-        {permissionMode !== 'Overview' && (
-            <select
-            className="w-full mb-4 px-3 py-2 rounded border dark:bg-gray-700 dark:text-white"
-            value={selectedTargetId}
-            onChange={(e) => setSelectedTargetId(Number(e.target.value))}
-            >
-            <option value="">-- Select a {permissionMode === 'Members' ? 'member' : 'role'} --</option>
-            {(permissionMode === 'Members' ? members : roles).map((entity) => (
-                <option key={entity.id} value={entity.id}>
-                {permissionMode === 'Members' ? entity.full_name || entity.username : entity.name}
-                </option>
-            ))}
-            </select>
-        )}
-
-        {/* Promote Button */}
-        {permissionMode !== 'Overview' && selectedTargetId && (
-            <div className="mb-4">
-            <button
-                onClick={() => setShowPromoteConfirm(true)}
-                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-            >
-                Promote to Full Admin
-            </button>
-            </div>
-        )}
-
-        {/* Permissions Group */}
-        {permissionMode !== 'Overview' && selectedTargetId && (
-            <div className="space-y-4">
-            {[
-                {
-                section: '🔐 General Admin Permissions',
-                keys: [
-                    'manage_calendar_settings',
-                    'manage_roles',
-                    'manage_colors',
-                ],
-                },
-                {
-                section: '📅 Schedule & Shift Management',
-                keys: [
-                    'edit_schedules',
-                    'edit_shifts',
-                    'approve_swaps',
-                    'approve_takes',
-                ],
-                },
-                {
-                section: '📆 Time Off & Holiday Management',
-                keys: ['approve_time_off', 'manage_holidays'],
-                },
-                {
-                section: '👥 Member Management',
-                keys: ['manage_members', 'assign_roles', 'toggle_admin'],
-                },
-                {
-                section: '🔔 Notification & Communication',
-                keys: ['send_notifications'],
-                },
-            ].map(({ section, keys }) => (
-                <div key={section}>
-                <h4 className="font-semibold text-black dark:text-white mb-1">{section}</h4>
-                <div className="space-y-1">
-                    {keys.map((key) => (
-                    <label key={key} className="flex items-center gap-2 text-sm text-black dark:text-white">
-                        <input
-                        type="checkbox"
-                        className="accent-purple-600"
-                        checked={permissionMap?.[permissionMode]?.[selectedTargetId]?.[key] || false}
-                        onChange={() => togglePermission(permissionMode, selectedTargetId, key)}
-                        />
-                        {formatPermissionLabel(key)}
-                    </label>
-                    ))}
-                </div>
-                </div>
-            ))}
-            </div>
-        )}
-
-        {/* Promote Confirmation Modal */}
-        {showPromoteConfirm && (
-            <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex justify-center items-center">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow max-w-sm w-full">
-                <h3 className="text-lg font-bold text-red-600 mb-2">Confirm Admin Promotion</h3>
-                <p className="text-sm text-gray-800 dark:text-gray-300 mb-4">
-                Are you sure you want to grant full admin access to this {permissionMode === 'Members' ? 'member' : 'role'}?
-                This gives full control over settings, shifts, and members.
-                </p>
-                <div className="flex justify-end gap-2">
-                <button
-                    className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-black dark:text-white rounded"
-                    onClick={() => setShowPromoteConfirm(false)}
-                >
-                    Cancel
-                </button>
-                <button
-                    className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-                    onClick={() => {
-                    grantFullAdmin(permissionMode, selectedTargetId);
-                    setShowPromoteConfirm(false);
-                    }}
-                >
-                    Confirm
-                </button>
-                </div>
-            </div>
-            </div>
-        )}
-        </CollapsibleSection>
-
 
         <CollapsibleSection title="Danger Zone" defaultOpen={false}>
             <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">

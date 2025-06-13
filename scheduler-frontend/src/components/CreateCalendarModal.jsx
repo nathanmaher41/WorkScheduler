@@ -6,6 +6,19 @@ export default function CreateCalendarModal({ onClose, onCreate }) {
   const [creatorTitle, setCreatorTitle] = useState('');
   const [addCreatorTitleToRoles, setAddCreatorTitleToRoles] = useState(false);
   const [roleTags, setRoleTags] = useState([]);
+  const [selectedColor, setSelectedColor] = useState('');
+  const [errors, setErrors] = useState({});
+
+
+  const colors = [
+  '#FF8A80', '#F8BBD0', '#E53935', '#B71C1C',
+  '#D81B60', '#880E4F', '#FFD180', '#E65100',
+  '#FFF59D', '#FFEB3B', '#F9A825', '#A5D6A7',
+  '#43A047', '#1B5E20', '#B2DFDB', '#009688',
+  '#004D40', '#90CAF9', '#1E88E5', '#0D47A1',
+  '#CE93D8', '#8E24AA', '#4A148C', '#BCAAA4',
+  '#8D6E63', '#3E2723'
+];
 
   const handleAddRole = () => {
     const trimmed = rolesInput.trim();
@@ -21,10 +34,29 @@ export default function CreateCalendarModal({ onClose, onCreate }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const finalRoles = addCreatorTitleToRoles && creatorTitle.trim() ? [...roleTags, creatorTitle.trim()] : roleTags;
-    onCreate({ name, roles: finalRoles, creator_title: creatorTitle });
-  };
+    const finalRoles = addCreatorTitleToRoles && creatorTitle.trim()
+      ? [...roleTags, creatorTitle.trim()]
+      : roleTags;
 
+    const newErrors = {};
+    if (!selectedColor) {
+      newErrors.color = 'Please pick a color.';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    console.log("📦 Submitting calendar:", {
+      name,
+      input_roles: finalRoles,
+      creator_title: creatorTitle,
+      color: selectedColor,
+    });
+
+    onCreate({ name, input_roles: finalRoles, creator_title: creatorTitle, color: selectedColor });
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <form
@@ -50,7 +82,26 @@ export default function CreateCalendarModal({ onClose, onCreate }) {
           value={creatorTitle}
           onChange={(e) => setCreatorTitle(e.target.value)}
         />
-        {creatorTitle && <p className="text-sm text-purple-700 dark:text-purple-300 mb-2">Will be shown as ADMIN - {creatorTitle.toUpperCase()}</p>}
+
+        <label className="block mb-2 font-medium">Pick a Color</label>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {colors.map(color => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => setSelectedColor(color)}
+                className={`w-6 h-6 rounded-full border-2 transition ${
+                  selectedColor === color ? 'border-black dark:border-white' : 'border-transparent'
+                }`}
+                style={{
+                  backgroundColor: color,
+                  cursor: 'pointer'
+                }}
+              />
+            ))}
+          </div>
+          {errors.color && <p className="text-red-500 text-sm">{errors.color}</p>}
+
 
         <div className="mb-4">
           <label className="inline-flex items-center">

@@ -1,11 +1,13 @@
 from django.db import transaction
+from rest_framework_simplejwt.views import TokenObtainPairView
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 from rest_framework import generics, permissions, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .permissions import IsScheduleAdmin
+from .permissions import IsScheduleAdmin, HasCalendarPermissionOrAdmin
 from django.utils.timezone import localtime
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView
@@ -22,6 +24,7 @@ from .models import (
     ShiftTakeRequest,
     InboxNotification,
     WorkplaceHoliday,
+    CalendarPermission
 )
 from .serializers import (
     RegisterSerializer,
@@ -43,7 +46,10 @@ from .serializers import (
     ShiftTakeRequestSerializer,
     InboxNotificationSerializer,
     TimeOffRequestSerializer,
-    WorkplaceHolidaySerializer
+    WorkplaceHolidaySerializer,
+    CalendarPermissionSerializer,
+    CalendarMembershipPermissionSerializer,
+    CustomTokenObtainPairSerializer
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -95,6 +101,9 @@ class RegisterView(generics.CreateAPIView):
             recipient_list=[user.email],
             fail_silently=False,
         )
+
+class CustomLoginView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 class ActivateUserView(APIView):
     permission_classes = [AllowAny]
@@ -318,7 +327,7 @@ class ShiftSwapApproveView(APIView):
         if not shift_a.is_swap_pending or shift_a.swap_requested_by is None:
             return Response({"error": "No pending swap on this shift."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if schedule.require_admin_swap_approval:
+        if not schedule.calendar.allow_swap_without_approval:
             shift_a.swap_approved_by = request.user
             shift_a.save()
             return Response({"message": "Swap approved by target employee, pending admin approval."})
@@ -337,7 +346,6 @@ class ShiftSwapApproveView(APIView):
             shift_b.save()
 
         return Response({"message": "Shift swap completed successfully."})
-
 
 class IncomingSwapRequestsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -505,6 +513,18 @@ class CalendarCreateView(generics.CreateAPIView):
     serializer_class = CalendarSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print("❌ Calendar creation failed validation:")
+            print(serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        print("✅ Validation passed, calling perform_create")
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def generate_unique_code(self, length=6):
         chars = string.ascii_uppercase + string.digits
         for _ in range(10):
@@ -514,43 +534,50 @@ class CalendarCreateView(generics.CreateAPIView):
         raise ValueError("Could not generate a unique join code.")
 
     def perform_create(self, serializer):
-        calendar = serializer.save(
-            created_by=self.request.user,
-            join_code=self.generate_unique_code()
-        )
+        try:
+            print("📌 Inside perform_create")
+            calendar = serializer.save(
+                created_by=self.request.user,
+                join_code=self.generate_unique_code()
+            )
+        except Exception as e:
+            print("❌ Calendar serializer save failed:", e)
+            print("🧪 Serializer validated data:", serializer.validated_data)
+            raise
 
         # Always create core roles
         CalendarRole.objects.create(calendar=calendar, name='Staff')
+        staff_role = CalendarRole.objects.get(calendar=calendar, name='Staff')
 
-        # Extract and sanitize
-        creator_title_raw = self.request.data.get("creator_title", "").strip()
-        extra_roles = self.request.data.get("roles", [])
+        # Extract from request
+        data = self.request.data
+        creator_title_raw = serializer.validated_data.get("creator_title", "").strip()
+        extra_roles = serializer.validated_data.get("input_roles", [])
         add_creator_title = creator_title_raw and creator_title_raw.lower() not in ['admin', 'staff']
 
+        # Create title role if needed
         creator_title_obj = None
         if creator_title_raw:
-            # Normalize capitalization (e.g., Manager not manager)
             existing = calendar.roles.filter(name__iexact=creator_title_raw).first()
             creator_title_obj = existing or CalendarRole.objects.create(
                 calendar=calendar,
                 name=creator_title_raw.capitalize()
             )
 
-        # Add any additional non-core roles
+        # Add extra roles
         if isinstance(extra_roles, list):
             for role_name in extra_roles:
                 if role_name.lower() not in ['staff', 'admin']:
                     calendar.roles.get_or_create(name=role_name.capitalize())
 
-        # assign the membership correctly
+        # Assign membership with color
         CalendarMembership.objects.create(
             user=self.request.user,
             calendar=calendar,
-            title=creator_title_obj,
-            is_admin=True
+            title=creator_title_obj or staff_role,
+            is_admin=True,
+            color=data.get('color'),  # pulled from self.request.data
         )
-
-
 
 class CalendarListView(generics.ListAPIView):
     serializer_class = CalendarSerializer
@@ -705,74 +732,98 @@ class ShiftSwapAcceptView(APIView):
     def post(self, request, swap_id):
         try:
             swap = ShiftSwapRequest.objects.select_related(
-                'requesting_shift__schedule',
-                'target_shift__schedule'
+                'requesting_shift__schedule__calendar',
+                'target_shift__schedule__calendar'
             ).get(id=swap_id)
         except ShiftSwapRequest.DoesNotExist:
             return Response({"error": "Swap request not found."}, status=404)
 
-        if swap.target_shift.employee != request.user:
-            return Response({"error": "You are not authorized to approve this swap."}, status=403)
+        calendar = swap.target_shift.schedule.calendar
 
+        is_target = swap.target_shift.employee == request.user
+        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+        self.calendar = calendar  # for permission class if needed
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
+
+        if not (is_target or is_admin or has_perm):
+            return Response({"error": "You do not have permission to approve this swap."}, status=403)
+
+        requires_admin_approval = not calendar.allow_swap_without_approval
+
+        # Target approves — wait for admin
+        if requires_admin_approval and is_target and not (is_admin or has_perm):
+            swap.approved_by_target = True
+            swap.save()
+            return Response({
+                "message": "Swap accepted by target. Pending admin approval.",
+                "requires_admin_approval": True
+            })
+
+        # Otherwise fully approve
         swap.approved_by_target = True
+        swap.approved_by_admin = True
         swap.save()
 
-        if not swap.target_shift.schedule.require_admin_swap_approval:
-            with transaction.atomic():
-                a = swap.requesting_shift
-                b = swap.target_shift
-                a_employee = a.employee
+        with transaction.atomic():
+            a = swap.requesting_shift
+            b = swap.target_shift
+            a_employee = a.employee
 
-                a.employee = b.employee
-                b.employee = a_employee
+            a.employee = b.employee
+            b.employee = a_employee
 
-                a.save()
-                b.save()
+            a.save()
+            b.save()
 
-                swap.approved_by_admin = True
-                swap.save()
+            InboxNotification.objects.create(
+                user=swap.requested_by,
+                notification_type='SWAP_REQUEST',
+                message=f"Your swap request for {format_shift_time(swap.requesting_shift)} was approved.",
+                related_object_id=swap.requesting_shift.id,
+                calendar=calendar
+            )
 
-                from .models import InboxNotification
-                InboxNotification.objects.create(
-                    user=swap.requested_by,
-                    notification_type='SWAP_REQUEST',
-                    message=f"Your swap request for {format_shift_time(swap.requesting_shift)} was approved.",
-                    related_object_id=swap.requesting_shift.id,
-                    calendar=swap.requesting_shift.schedule.calendar  # ✅ always scoped correctly
-                )
-                ShiftSwapRequest.objects.filter(
-                    models.Q(requesting_shift=a) | models.Q(target_shift=a) |
-                    models.Q(requesting_shift=b) | models.Q(target_shift=b)
-                ).exclude(id=swap.id).delete()
+            ShiftSwapRequest.objects.filter(
+                models.Q(requesting_shift=a) | models.Q(target_shift=a) |
+                models.Q(requesting_shift=b) | models.Q(target_shift=b)
+            ).exclude(id=swap.id).delete()
 
-                swap.delete()
+            swap.delete()
 
-        return Response({"message": "Swap approved successfully."})
-
+        return Response({
+            "message": "Swap approved successfully.",
+            "requires_admin_approval": False
+        })
 
 class ShiftSwapRejectView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, swap_id):
         try:
-            swap = ShiftSwapRequest.objects.select_related('requesting_shift__schedule').get(id=swap_id)
+            swap = ShiftSwapRequest.objects.select_related("target_shift__schedule__calendar").get(id=swap_id)
         except ShiftSwapRequest.DoesNotExist:
             return Response({"error": "Swap request not found."}, status=404)
 
-        if swap.target_shift.employee != request.user:
-            return Response({"error": "You are not authorized to reject this swap."}, status=403)
+        calendar = swap.target_shift.schedule.calendar
 
-        # Create rejection notification before deleting the swap
+        is_target = swap.target_shift.employee == request.user
+        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+        self.calendar = calendar
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
+
+        if not (is_target or is_admin or has_perm):
+            return Response({"error": "You do not have permission to reject this swap."}, status=403)
+
         InboxNotification.objects.create(
             user=swap.requested_by,
             notification_type='SWAP_REQUEST',
             message=f"Your swap request for {format_shift_time(swap.requesting_shift)} was rejected.",
             related_object_id=swap.requesting_shift.id,
-            calendar=swap.requesting_shift.schedule.calendar
+            calendar=calendar
         )
 
         swap.delete()
-        return Response({"message": "Swap request rejected and deleted."})
+        return Response({"message": "Swap request rejected."})
 
 
 class ShiftTakeRequestView(APIView):
@@ -833,13 +884,33 @@ class ShiftTakeAcceptView(APIView):
 
     def post(self, request, take_id):
         try:
-            take = ShiftTakeRequest.objects.select_related("shift").get(id=take_id)
+            take = ShiftTakeRequest.objects.select_related("shift", "shift__schedule__calendar").get(id=take_id)
         except ShiftTakeRequest.DoesNotExist:
             return Response({"error": "Request not found."}, status=404)
 
-        if take.requested_to != request.user:
-            return Response({"error": "You are not the recipient."}, status=403)
+        calendar = take.shift.schedule.calendar
 
+        # Permission checks
+        is_target = take.requested_to == request.user
+        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+        self.calendar = calendar  # required for HasCalendarPermissionOrAdmin to work properly
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_take_requests").has_permission(request, self)
+
+        if not (is_target or is_admin or has_perm):
+            return Response({"error": "You do not have permission to accept this take request."}, status=403)
+
+        requires_admin = calendar.require_take_approval
+
+        # If admin approval is required and current user is the recipient
+        if requires_admin and is_target and not (is_admin or has_perm):
+            take.approved_by_target = True
+            take.save()
+            return Response({
+                "success": True,
+                "requires_admin_approval": True
+            })
+
+        # Determine direction of shift transfer
         direction = "give" if take.requested_by == take.shift.employee else "take"
 
         with transaction.atomic():
@@ -854,13 +925,16 @@ class ShiftTakeAcceptView(APIView):
                 user=take.requested_by,
                 notification_type='TAKE_REQUEST',
                 message=f"Your shift take request for {format_shift_time(take.shift)} was approved.",
-                related_object_id=take.shift.id,  # ✅ needs to open the shift modal
-                calendar=take.shift.schedule.calendar
+                related_object_id=take.shift.id,
+                calendar=calendar
             )
 
             take.delete()
 
-        return Response({"message": "Shift successfully taken."})
+        return Response({
+            "success": True,
+            "requires_admin_approval": False
+        })
 
 
 class ShiftTakeRejectView(APIView):
@@ -868,23 +942,31 @@ class ShiftTakeRejectView(APIView):
 
     def post(self, request, take_id):
         try:
-            take = ShiftTakeRequest.objects.get(id=take_id)
+            take = ShiftTakeRequest.objects.select_related("shift__schedule__calendar").get(id=take_id)
         except ShiftTakeRequest.DoesNotExist:
             return Response({"error": "Request not found."}, status=404)
 
-        if take.requested_to != request.user:
-            return Response({"error": "You are not the recipient."}, status=403)
-        
+        calendar = take.shift.schedule.calendar
+
+        # Permission checks
+        is_target = take.requested_to == request.user
+        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+        self.calendar = calendar
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_take_requests").has_permission(request, self)
+
+        if not (is_target or is_admin or has_perm):
+            return Response({"error": "You do not have permission to reject this take request."}, status=403)
+
         InboxNotification.objects.create(
             user=take.requested_by,
             notification_type='TAKE_REQUEST',
             message=f"Your shift take request for {format_shift_time(take.shift)} was rejected.",
             related_object_id=take.shift.id,
-            calendar=take.shift.schedule.calendar
+            calendar=calendar
         )
         take.delete()
-        return Response({"message": "Shift take request rejected."})
 
+        return Response({"message": "Shift take request rejected."})
 
 class ShiftTakeRequestListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1073,17 +1155,33 @@ class ShiftDeleteView(generics.DestroyAPIView):
 
 class RequestOffCreateView(APIView):
     def post(self, request, calendar_id):
+        print("📥 Incoming request data:", request.data)
         serializer = TimeOffRequestSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(employee=request.user)
+            try:
+                calendar = Calendar.objects.get(id=calendar_id)
+            except Calendar.DoesNotExist:
+                return Response({"error": "Calendar not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer.save(employee=request.user, calendar=calendar)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        print("❌ Serializer errors:", serializer.errors)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class TimeOffListView(ListAPIView):
     serializer_class = TimeOffRequestSerializer
 
     def get_queryset(self):
-        return TimeOffRequest.objects.filter(status__in=['pending', 'approved'])
+        calendar_id = self.kwargs['calendar_id']
+        user = self.request.user
+
+        return TimeOffRequest.objects.filter(
+            calendar_id=calendar_id
+        ).filter(
+            Q(status='approved', visible_to_others=True) |
+            Q(employee=user)
+        )
+
 
 class TimeOffRequestDeleteView(generics.DestroyAPIView):
     queryset = TimeOffRequest.objects.all()
@@ -1117,6 +1215,15 @@ class WorkplaceHolidayDeleteView(generics.DestroyAPIView):
         calendar_id = self.kwargs['calendar_id']
         return WorkplaceHoliday.objects.filter(calendar_id=calendar_id)
 
+class WorkplaceHolidayDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = WorkplaceHolidaySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+
+    def get_queryset(self):
+        calendar_id = self.kwargs['calendar_id']
+        return WorkplaceHoliday.objects.filter(calendar_id=calendar_id)
+
 class CalendarMemberDetailView(APIView):
     def patch(self, request, calendar_id, user_id):
         try:
@@ -1140,7 +1247,8 @@ class CalendarMemberDetailView(APIView):
                 membership.title = title
             except CalendarRole.DoesNotExist:
                 return Response({'error': 'Invalid title'}, status=400)
-
+        if 'color' in request.data:
+            membership.color = request.data['color']
         membership.save()
         return Response(CalendarMembershipSerializer(membership).data)
 
@@ -1217,4 +1325,251 @@ class CalendarRoleRenameView(APIView):
         role.save()
         return Response(CalendarRoleSerializer(role).data)
 
+class CalendarPermissionListView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        permissions = CalendarPermission.objects.all()
+        serializer = CalendarPermissionSerializer(permissions, many=True)
+        return Response(serializer.data)
+
+class CalendarRolePermissionsUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id, role_id):
+        try:
+            role = CalendarRole.objects.get(id=role_id, calendar_id=calendar_id)
+        except CalendarRole.DoesNotExist:
+            return Response({"error": "Role not found."}, status=404)
+
+        perms = role.permissions.all()
+        data = CalendarPermissionSerializer(perms, many=True).data
+        return Response({"permissions": data})
+
+    def post(self, request, calendar_id, role_id):
+        permission_codenames = request.data.get('permissions', [])
+
+        try:
+            role = CalendarRole.objects.get(id=role_id, calendar_id=calendar_id)
+        except CalendarRole.DoesNotExist:
+            return Response({"error": "Role not found."}, status=404)
+
+        # Get new permission objects from codenames
+        new_permissions = set(CalendarPermission.objects.filter(codename__in=permission_codenames))
+        
+        # Update role permissions directly
+        role.permissions.set(new_permissions)
+        role.save()
+
+        # ❗ No member updates here — let get_effective_permissions handle it
+        return Response({"message": "Role permissions updated successfully."})
+
+
+
+class CalendarMemberPermissionsUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, calendar_id, member_id):
+        permission_codenames = request.data.get('permissions', [])
+
+        try:
+            member = CalendarMembership.objects.get(id=member_id, calendar_id=calendar_id)
+        except CalendarMembership.DoesNotExist:
+            return Response({"error": "Member not found."}, status=404)
+
+        # Fetch permission objects from codenames
+        selected_perms = set(CalendarPermission.objects.filter(codename__in=permission_codenames))
+
+        # Role permissions fallback to empty set if no role
+        role_perms = set(member.title.permissions.all()) if member.title else set()
+
+        # Calculate custom and excluded sets
+        custom_perms = selected_perms - role_perms
+        excluded_perms = role_perms - selected_perms
+
+        # Apply changes
+        member.custom_permissions.set(custom_perms)
+        member.excluded_permissions.set(excluded_perms)
+
+        return Response({"message": "Member permissions updated."})
+
+
+class CalendarMemberEffectivePermissionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id, member_id):
+        try:
+            membership = CalendarMembership.objects.get(id=member_id, calendar_id=calendar_id)
+        except CalendarMembership.DoesNotExist:
+            return Response({"error": "Member not found."}, status=404)
+
+        perms = membership.get_effective_permissions()
+        data = CalendarPermissionSerializer(perms, many=True).data
+        return Response({"permissions": data})  # ✅ wrap in "permissions"
+
+class PendingSwapsAndTakesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id):
+        user = request.user
+
+        try:
+            membership = CalendarMembership.objects.get(calendar_id=calendar_id, user=user)
+        except CalendarMembership.DoesNotExist:
+            raise PermissionDenied("You are not a member of this calendar.")
+
+        has_permission = (
+            membership.is_admin or
+            membership.permissions.filter(codename="approve_swaps").exists() or
+            membership.permissions.filter(codename="approve_takes").exists()
+        )
+
+        if not has_permission:
+            raise PermissionDenied("You do not have permission to view swap/take requests.")
+
+        swap_requests = ShiftSwapRequest.objects.filter(
+            shift__calendar_id=calendar_id,
+            is_active=True,
+            accepted_at__isnull=True,
+            rejected_at__isnull=True,
+        ).select_related("shift", "requester", "requested_with")
+
+        take_requests = ShiftTakeRequest.objects.filter(
+            shift__calendar_id=calendar_id,
+            is_active=True,
+            accepted_at__isnull=True,
+            rejected_at__isnull=True,
+        ).select_related("shift", "requester", "requested_to")
+
+        return Response({
+            "swap_requests": ShiftSwapRequestSerializer(swap_requests, many=True).data,
+            "take_requests": ShiftTakeRequestSerializer(take_requests, many=True).data,
+        })
+
+class AdminPendingRequestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id):
+        calendar = get_object_or_404(Calendar, id=calendar_id)
+        user = request.user
+
+        # ✅ Check membership
+        try:
+            membership = CalendarMembership.objects.get(calendar=calendar, user=user)
+        except CalendarMembership.DoesNotExist:
+            return Response({"error": "You are not a member of this calendar."}, status=403)
+
+        has_swap_perm = membership.is_admin or membership.has_permission("approve_reject_swap_requests")
+        has_take_perm = membership.is_admin or membership.has_permission("approve_reject_take_requests")
+
+        if not has_swap_perm and not has_take_perm:
+            return Response({"error": "You do not have approval permissions."}, status=403)
+
+        data = {}
+
+        # 🟣 Pending swap requests
+        if has_swap_perm and calendar.allow_swap_without_approval is False:
+            pending_swaps = ShiftSwapRequest.objects.filter(
+                requesting_shift__schedule__calendar=calendar,
+                approved_by_target=True,
+                approved_by_admin=False
+            ).select_related('requesting_shift__employee', 'target_shift__employee')
+
+            data['swap_requests'] = ShiftSwapRequestSerializer(pending_swaps, many=True).data
+
+        # 🔵 Pending take requests
+        if has_take_perm and calendar.require_take_approval:
+            pending_takes = ShiftTakeRequest.objects.filter(
+                shift__schedule__calendar=calendar,
+                approved_by_target=True,
+                approved_by_admin=False
+            ).select_related('shift__employee', 'requested_by', 'requested_to')
+
+            data['take_requests'] = ShiftTakeRequestSerializer(pending_takes, many=True).data
+
+        return Response(data)
+
+class PendingSwapRequestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id):
+        user = request.user
+        is_admin = CalendarMembership.objects.filter(calendar_id=calendar_id, user=user, is_admin=True).exists()
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
+
+        if not (is_admin or has_perm):
+            return Response({"detail": "Permission denied."}, status=403)
+
+        swaps = ShiftSwapRequest.objects.filter(
+            requesting_shift__schedule__calendar_id=calendar_id,
+            approved_by_target=True,
+            approved_by_admin=False
+        )
+        return Response(ShiftSwapRequestSerializer(swaps, many=True).data)
+
+
+class PendingTakeRequestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id):
+        user = request.user
+        is_admin = CalendarMembership.objects.filter(calendar_id=calendar_id, user=user, is_admin=True).exists()
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_take_requests").has_permission(request, self)
+
+        if not (is_admin or has_perm):
+            return Response({"detail": "Permission denied."}, status=403)
+
+        takes = ShiftTakeRequest.objects.filter(
+            shift__schedule__calendar_id=calendar_id,
+            approved_by_target=True,
+            approved_by_admin=False
+        )
+        return Response(ShiftTakeRequestSerializer(takes, many=True).data)
+
+class CalendarTimeOffApprovalListView(ListAPIView):
+    permission_classes = [HasCalendarPermissionOrAdmin('approve_reject_time_off')]
+    serializer_class = TimeOffRequestSerializer
+
+    def get_queryset(self):
+        calendar_id = self.kwargs['calendar_id']
+        return TimeOffRequest.objects.filter(calendar_id=calendar_id, status='pending')
+
+
+# Approve a specific time off request
+class TimeOffApproveView(APIView):
+    permission_classes = [HasCalendarPermissionOrAdmin('approve_reject_time_off')]
+
+    def post(self, request, calendar_id, pk):
+        try:
+            timeoff = TimeOffRequest.objects.get(id=pk, calendar_id=calendar_id)
+        except TimeOffRequest.DoesNotExist:
+            return Response({'error': 'Time off not found.'}, status=404)
+
+        timeoff.status = 'approved'
+        timeoff.visible_to_others = True
+        timeoff.rejection_reason = ''
+        timeoff.save()
+
+        return Response({'success': 'Time off approved.'}, status=200)
+
+
+class TimeOffRejectView(APIView):
+    permission_classes = [HasCalendarPermissionOrAdmin('approve_reject_time_off')]
+
+    def post(self, request, calendar_id, pk):
+        reason = request.data.get('rejection_reason', '')
+
+        try:
+            timeoff = TimeOffRequest.objects.get(id=pk, calendar_id=calendar_id)
+        except TimeOffRequest.DoesNotExist:
+            return Response({'error': 'Time off not found.'}, status=404)
+
+        timeoff.status = 'denied'
+        timeoff.visible_to_others = False
+        timeoff.rejection_reason = reason
+        timeoff.save()
+
+        # TODO: Create inbox notification for rejection (we'll add this after)
+        return Response({'success': 'Time off rejected.'}, status=200)
+
+        

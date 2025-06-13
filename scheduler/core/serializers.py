@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from .models import(
     Schedule, 
@@ -101,7 +102,7 @@ class ShiftSerializer(serializers.ModelSerializer):
         model = Shift
         fields = [
             'id', 'schedule', 'start_time', 'end_time',
-            'position', 'employee', 'employee_name', 'color'
+            'position', 'employee', 'employee_name', 'color', 'notes'
         ]
 
     def get_employee_name(self, obj):
@@ -137,7 +138,7 @@ class TimeOffRequestDetailSerializer(serializers.ModelSerializer):
 class ScheduleSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Schedule
-        fields = ['require_admin_swap_approval']
+        fields = []
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -176,12 +177,13 @@ class CalendarMembershipSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
     is_admin = serializers.BooleanField(read_only=True)
-    color = serializers.CharField(read_only=True)
+    color = serializers.CharField()
     title_id = serializers.IntegerField(source='title.id', read_only=True)  # for dropdown selection
+    membership_id = serializers.IntegerField(source='id')
 
     class Meta:
         model = CalendarMembership
-        fields = ['id', 'username', 'full_name', 'role', 'is_admin', 'color', 'title_id']
+        fields = ['id', 'username', 'full_name', 'role', 'is_admin', 'color', 'title_id', 'membership_id']
 
     def get_full_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip()
@@ -191,18 +193,64 @@ class CalendarMembershipSerializer(serializers.ModelSerializer):
             return obj.title.name.upper()
         return "None"
 
+class CalendarPermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarPermission
+        fields = ['id', 'codename', 'label']
+
+class CalendarMembershipPermissionSerializer(serializers.ModelSerializer):
+    custom_permissions = CalendarPermissionSerializer(many=True, read_only=True)
+    effective_permissions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CalendarMembership
+        fields = ['id', 'user', 'custom_permissions', 'effective_permissions']
+
+    def get_effective_permissions(self, obj):
+        perms = obj.get_effective_permissions()
+        return [p.codename for p in perms]
+
 class CalendarRoleSerializer(serializers.ModelSerializer):
+    permissions = CalendarPermissionSerializer(many=True, read_only=True)
+
     class Meta:
         model = CalendarRole
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'permissions']
 
 class CalendarSerializer(serializers.ModelSerializer):
     members = CalendarMembershipSerializer(source='calendarmembership_set', many=True, read_only=True)
     roles = CalendarRoleSerializer(many=True, read_only=True)
-    self_role_change_allowed = serializers.BooleanField()
+    self_role_change_allowed = serializers.BooleanField(default=True)
+    allow_swap_without_approval = serializers.BooleanField(default=True)
+    require_take_approval = serializers.BooleanField(default=True)
+
+    # Fields only used during creation
+    creator_title = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    input_roles = serializers.ListField(
+        child=serializers.CharField(), write_only=True, required=False
+    )
+
+    def create(self, validated_data):
+        print("📤 CalendarSerializer.create() called with:", validated_data)
+        color = validated_data.pop("color", None)
+        creator_title = validated_data.pop("creator_title", None)
+        input_roles = validated_data.pop("input_roles", None)
+
+        calendar = super().create(validated_data)
+
+        user = self.context['request'].user
+
+        # Set the color on the CalendarMembership for the creator
+        CalendarMembership.objects.filter(calendar=calendar, user=user).update(color=color)
+
+        return calendar
+
     class Meta:
         model = Calendar
-        fields = ['id', 'name', 'join_code', 'members', 'roles', 'self_role_change_allowed']
+        fields = [
+            'id', 'name', 'join_code', 'members', 'roles', 'self_role_change_allowed',
+            'creator_title', 'input_roles', 'allow_swap_without_approval', 'require_take_approval',
+        ]
 
 class CalendarJoinSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
@@ -215,8 +263,8 @@ class CalendarJoinSerializer(serializers.ModelSerializer):
     def get_roles(self, obj):
         roles = obj.roles.exclude(name__iexact='admin')
         return CalendarRoleSerializer(roles, many=True).data
-    def get_used_colors(self, obj):
-        return list(obj.calendarmembership_set.exclude(color__isnull=True).values_list('color', flat=True))
+    def get_used_colors(self, obj):     
+        return list(obj.calendarmembership_set.filter(color__isnull=False).values_list('color', flat=True))
 
 class CalendarMembershipSimpleSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(source='user.id', read_only=True)
@@ -248,6 +296,9 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
     position = serializers.CharField(source='requesting_shift.position', read_only=True)
     requesting_employee_id = serializers.IntegerField(source='requesting_shift.employee.id', read_only=True)
     target_employee_id = serializers.IntegerField(source='target_shift.employee.id', read_only=True)
+    approved_by_target = serializers.BooleanField(read_only=True)
+    approved_by_admin = serializers.BooleanField(read_only=True)
+    requires_admin_approval = serializers.SerializerMethodField()
 
 
     class Meta:
@@ -262,7 +313,10 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
             'target_shift_time',
             'position',
             'requesting_employee_id',
-            'target_employee_id'
+            'target_employee_id',
+            'approved_by_target',
+            'approved_by_admin',
+            'requires_admin_approval',
         ]
 
     def get_requesting_shift_time(self, obj):
@@ -284,6 +338,9 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
         user = obj.target_shift.employee
         return f"{user.first_name} {user.last_name}".strip() or user.username
 
+    def get_requires_admin_approval(self, obj):
+        return not obj.target_shift.schedule.calendar.allow_swap_without_approval
+
 
 class ShiftTakeRequestSerializer(serializers.ModelSerializer):
     shift_time = serializers.SerializerMethodField()
@@ -292,11 +349,16 @@ class ShiftTakeRequestSerializer(serializers.ModelSerializer):
     direction = serializers.SerializerMethodField()
     requested_by_id = serializers.IntegerField(source="requested_by.id")
     requested_to_id = serializers.IntegerField(source="requested_to.id")
-
+    requires_admin_approval = serializers.SerializerMethodField()
+    approved_by_target = serializers.BooleanField()
 
     class Meta:
         model = ShiftTakeRequest
-        fields = ['id', 'shift', 'shift_time', 'shift_owner', 'requester', 'direction', 'requested_by_id', 'requested_to_id']
+        fields = [
+            'id', 'shift', 'shift_time', 'shift_owner', 'requester', 'direction',
+            'requested_by_id', 'requested_to_id', 'requires_admin_approval',
+            'approved_by_target'
+        ]
 
     def get_shift_time(self, obj):
         return {
@@ -313,6 +375,9 @@ class ShiftTakeRequestSerializer(serializers.ModelSerializer):
     def get_direction(self, obj):
         # If the requester is not the shift owner, they want to *take* the shift
         return "take" if obj.requested_to == obj.shift.employee else "give"
+
+    def get_requires_admin_approval(self, obj):
+        return obj.shift.schedule.calendar.require_take_approval
 
 class InboxNotificationSerializer(serializers.ModelSerializer):
     calendar = serializers.SerializerMethodField()
@@ -331,23 +396,21 @@ class InboxNotificationSerializer(serializers.ModelSerializer):
 
 class TimeOffRequestSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField(read_only=True)
+    calendar = serializers.PrimaryKeyRelatedField(read_only=True) 
 
     class Meta:
         model = TimeOffRequest
         fields = [
-            'id',
-            'employee',
-            'employee_name',
-            'start_date',
-            'end_date',
-            'reason',
-            'status',
-            'created_at',
+            'id', 'employee', 'employee_name', 'calendar',
+            'start_date', 'end_date', 'reason',
+            'status', 'created_at', 'visible_to_others',
+            'rejection_reason',
         ]
-        read_only_fields = ['employee', 'status', 'created_at']
+        read_only_fields = ['employee', 'status', 'created_at', 'visible_to_others', 'rejection_reason']
 
     def get_employee_name(self, obj):
         return obj.employee.get_full_name() or obj.employee.username
+
 
 class WorkplaceHolidaySerializer(serializers.ModelSerializer):
     class Meta:
@@ -355,7 +418,23 @@ class WorkplaceHolidaySerializer(serializers.ModelSerializer):
         fields = ['id', 'calendar', 'date', 'end_date', 'type', 'start_time', 'end_time', 'note', 'title']
         read_only_fields = ['calendar']
 
-class CalendarPermissionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CalendarPermission
-        fields = ['id', 'codename', 'label']
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        login_input = attrs.get("username")  # could be username or email
+        password = attrs.get("password")
+
+        # Try to find user by email or username
+        user = User.objects.filter(email__iexact=login_input).first() \
+            or User.objects.filter(username__iexact=login_input).first()
+
+        if user is None or not user.check_password(password):
+            raise serializers.ValidationError("Incorrect username or password.")
+
+        if not user.is_active:
+            raise serializers.ValidationError("User account is disabled.")
+
+        data = super().validate({
+            "username": user.username,  # force super to use username
+            "password": password
+        })
+        return data

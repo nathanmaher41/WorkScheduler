@@ -10,6 +10,7 @@ import ResendActivation from './pages/ResendActivation';
 import CompleteProfile from "./pages/CompleteProfile";
 import DarkTest from './components/DarkTest';
 import CalendarView from "./pages/CalendarView";
+import AdminPanel from "./pages/AdminPanel"; // ✅ Import your admin panel
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/resend-activation" element={<ResendActivation />} />
         <Route path="/complete-profile" element={<CompleteProfile />} />
         <Route path="/calendar/:id" element={<CalendarView />} />
+        <Route path="/calendar/:id/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} /> {/* ✅ New route */}
         <Route
           path="/dashboard"
           element={
@@ -37,4 +39,3 @@ function App() {
 }
 
 export default App;
-

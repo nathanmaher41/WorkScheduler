@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
+import DatePicker from 'react-datepicker';
 
 export default function RequestOffModal({ isOpen, onClose, calendarId, selectedDate, onRequestSubmitted, isAdmin }) {
   const [endDate, setEndDate] = useState('');
@@ -92,6 +93,7 @@ export default function RequestOffModal({ isOpen, onClose, calendarId, selectedD
           title,
         });
       } else {
+        console.log("Submitting time off:", { startDate, endDate, reason });
         await axios.post(`/api/calendars/${calendarId}/request-off/`, {
           start_date: startDate,
           end_date: endDate || startDate,
@@ -115,6 +117,38 @@ export default function RequestOffModal({ isOpen, onClose, calendarId, selectedD
       setError('Failed to submit request.');
     }
   };
+
+  function formatDateLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // useEffect(() => {
+  //   if (startDate && (!endDate || new Date(endDate) < new Date(startDate))) {
+  //     const start = new Date(startDate);
+  //     const defaultEnd = new Date(start);
+  //     defaultEnd.setDate(defaultEnd.getDate() + 1); // 1-day default for time off
+  //     setEndDate(defaultEnd.toISOString().split('T')[0]);
+  //   }
+  // }, [startDate]);
+
+  // useEffect(() => {
+  //   if (startDate && (!holidayEndDate || new Date(holidayEndDate) < new Date(startDate))) {
+  //     const start = new Date(startDate);
+  //     const defaultEnd = new Date(start);
+  //     defaultEnd.setDate(defaultEnd.getDate() + 1); // 1-day default for holidays
+  //     setHolidayEndDate(defaultEnd.toISOString().split('T')[0]);
+  //   }
+  // }, [startDate]);
+
+  // useEffect(() => {
+  //   if (startDate && !endDate) {
+  //     setEndDate(startDate); // just set the same day so the calendar opens there
+  //   }
+  // }, [startDate]);
+
 
   if (!isOpen) return null;
 
@@ -153,20 +187,27 @@ export default function RequestOffModal({ isOpen, onClose, calendarId, selectedD
               <option value="altered">Altered Hours</option>
             </select>
             <label className="block text-sm mb-1 text-black dark:text-white">Date</label>
-            <input
-                type="date"
-                className="w-full px-3 py-2 border rounded dark:bg-gray-700 text-black dark:text-white mb-3"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+            <DatePicker
+              selected={startDate ? new Date(startDate + 'T00:00:00') : null}
+              onChange={(date) => {
+                if (date) setStartDate(formatDateLocal(date));
+              }}
+              dateFormat="MM/dd/yyyy"
+              className="w-full px-3 py-2 border rounded dark:bg-gray-700 text-black dark:text-white mb-3"
+              placeholderText="Select holiday start date"
             />
             <label className="block text-sm mb-1 text-black dark:text-white">End Date (optional)</label>
-            <input
-                type="date"
+            <DatePicker
+                selected={holidayEndDate ? new Date(holidayEndDate + 'T00:00:00') : null}
+                onChange={(date) => {
+                  if (date) setHolidayEndDate(formatDateLocal(date));
+                }}
+                openToDate={startDate ? new Date(startDate + 'T00:00:00') : undefined}
+                minDate={startDate ? new Date(startDate) : null}
+                dateFormat="MM/dd/yyyy"
                 className="w-full px-3 py-2 border rounded dark:bg-gray-700 text-black dark:text-white mb-3"
-                value={holidayEndDate}
-                onChange={(e) => setHolidayEndDate(e.target.value)}
-            />
-
+                placeholderText="Select holiday end date"
+              />
             {holidayType === 'altered' && (
               <>
                 <label className="block text-sm mb-1 text-black dark:text-white">Start Time</label>
@@ -220,19 +261,39 @@ export default function RequestOffModal({ isOpen, onClose, calendarId, selectedD
         ) : (
           <>
             <label className="block text-sm mb-1 text-black dark:text-white">Start Date</label>
-            <input
+            {/* <input
               type="date"
               className="w-full px-3 py-2 border rounded dark:bg-gray-700 text-black dark:text-white mb-3"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-            />
-
+            /> */}
+            <DatePicker
+                selected={startDate ? new Date(startDate + 'T00:00:00') : null}
+                onChange={(date) => {
+                  if (date) setStartDate(formatDateLocal(date));
+                }}
+                dateFormat="MM/dd/yyyy"
+                className="w-full px-3 py-2 border rounded dark:bg-gray-700 text-black dark:text-white mb-3"
+                placeholderText="Select start date"
+              />
             <label className="block text-sm mb-1 text-black dark:text-white">End Date (optional)</label>
-            <input
+            {/* <input
               type="date"
+              key={`end-${startDate}`}
               className="w-full px-3 py-2 border rounded dark:bg-gray-700 text-black dark:text-white mb-3"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
+            /> */}
+            <DatePicker
+              selected={endDate ? new Date(endDate + 'T00:00:00') : null}
+              onChange={(date) => {
+                if (date) setEndDate(formatDateLocal(date));
+              }}
+              openToDate={startDate ? new Date(startDate + 'T00:00:00') : undefined}
+              minDate={startDate ? new Date(startDate) : null}
+              dateFormat="MM/dd/yyyy"
+              className="w-full px-3 py-2 border rounded dark:bg-gray-700 text-black dark:text-white mb-3"
+              placeholderText="Select end date"
             />
 
             <label className="block text-sm mb-1 text-black dark:text-white">Reason (optional)</label>

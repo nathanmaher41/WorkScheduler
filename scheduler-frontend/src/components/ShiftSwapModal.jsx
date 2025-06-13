@@ -103,8 +103,15 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
 
   const handleApprove = async (swapId) => {
     try {
-      await axios.post(`/api/shifts/swap/${swapId}/accept/`);
-      setSuccessMessage('Swap approved.');
+      const res = await axios.post(`/api/shifts/swap/${swapId}/accept/`);
+      const { requires_admin_approval, approved_by_target, approved_by_admin } = res.data;
+
+      if (approved_by_target && requires_admin_approval && !approved_by_admin) {
+        setSuccessMessage('✅ Accepted — pending admin approval.');
+      } else {
+        setSuccessMessage('Swap approved and shift transferred.');
+        if (onSwapComplete) onSwapComplete();
+      }
       await fetchPendingSwaps();
       if (onSwapComplete) onSwapComplete();
     } catch (err) {
@@ -124,10 +131,17 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
 
   const handleApproveTake = async (takeId) => {
     try {
-      await axios.post(`/api/shifts/take/${takeId}/accept/`);
-      setSuccessMessage('Take approved.');
+      const res = await axios.post(`/api/shifts/take/${takeId}/accept/`);
+      const { requires_admin_approval } = res.data || {};
+
+      if (requires_admin_approval) {
+        setSuccessMessage('Accepted — pending admin approval.');
+      } else {
+        setSuccessMessage('Take request approved and shift transferred.');
+        if (onSwapComplete) onSwapComplete();
+      }
+
       await fetchPendingTakes();
-      if (onSwapComplete) onSwapComplete();
     } catch (err) {
       console.error('Error approving take:', err);
     }
@@ -249,13 +263,22 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     const isIncomingGive = !isOwnShift && req.direction === 'give' && req.requested_to_id === currentUserId;
     const isOutgoingTake = !isOwnShift && req.direction === 'take' && req.requested_by_id === currentUserId;
     const isOutgoingGive = isOwnShift && req.direction === 'give' && req.requested_by_id === currentUserId;
-
+    console.log("🔍 req:", {
+      id: req.id,
+      isIncomingTake: req.isIncomingTake,
+      isIncomingGive: req.isIncomingGive,
+      approved_by_target: req.approved_by_target,
+      requires_admin_approval: req.requires_admin_approval,
+      currentUserId,
+      requested_to_id: req.requested_to_id,
+    });
     return {
       ...req,
       isIncomingTake,
       isIncomingGive,
       isOutgoingTake,
       isOutgoingGive,
+      requires_admin_approval: req.requires_admin_approval || false, // ← THIS IS THE MISSING PIECE
     };
   });
 
@@ -269,6 +292,8 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
       .map(req => req.requested_to_id)
   );
 
+  const member = members.find(m => m.id === shift.employee);
+  console.log("🧠 Member object for shift:", member);
 
 
 
@@ -316,9 +341,15 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
           )}
         </div>
         <p><strong>Employee:</strong> {shift.employee_name}</p>
+        <p><strong>Role:</strong> {member?.role || '—'}</p>
         <p><strong>Date:</strong> {formatDate(shift.start_time)}</p>
         <p><strong>Start:</strong> {formatTime(shift.start_time)}</p>
         <p><strong>End:</strong> {formatTime(shift.end_time)}</p>
+        {shift.notes && (
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+            <strong>Notes:</strong> {shift.notes}
+          </p>
+        )}
 
         <div className="mt-4 flex gap-2">
           <button
@@ -432,27 +463,46 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
                   {enrichedTakes.map((req) => {
                     let content = null;
 
-                    if (req.isIncomingTake) {
-                      content = (
-                        <>
-                          <div>Incoming take request from {req.requester}</div>
-                          <div className="flex gap-3">
-                            <button onClick={() => handleApproveTake(req.id)} className="text-green-600 hover:underline">Approve</button>
-                            <button onClick={() => handleRejectTake(req.id)} className="text-red-600 hover:underline">Reject</button>
-                          </div>
-                        </>
-                      );
-                    } else if (req.isIncomingGive) {
-                      content = (
-                        <>
-                          <div>Incoming give request from {req.requester} — asking you to take their shift</div>
-                          <div className="flex gap-3">
-                            <button onClick={() => handleApproveTake(req.id)} className="text-green-600 hover:underline">Approve</button>
-                            <button onClick={() => handleRejectTake(req.id)} className="text-red-600 hover:underline">Reject</button>
-                          </div>
-                        </>
-                      );
-                    } else if (req.isOutgoingTake) {
+                                          if (req.isIncomingTake || req.isIncomingGive) {
+                        const alreadyApproved = req.approved_by_target === true;
+                        const requiresAdmin = req.requires_admin_approval === true;
+
+                        const showPendingApprovalMessage =
+                          alreadyApproved &&
+                          requiresAdmin &&
+                          req.requested_to_id === currentUserId;
+
+                        content = (
+                          <>
+                            <div>
+                              {req.isIncomingTake
+                                ? `Incoming take request from ${req.requester}`
+                                : `Incoming give request from ${req.requester} — asking you to take their shift`}
+                            </div>
+
+                            {showPendingApprovalMessage ? (
+                              <div className="text-green-600 dark:text-green-400 font-medium">
+                                ✅ Accepted — pending admin approval
+                              </div>
+                            ) : (
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => handleApproveTake(req.id)}
+                                  className="text-green-600 hover:underline"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRejectTake(req.id)}
+                                  className="text-red-600 hover:underline"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        );
+                      } else if (req.isOutgoingTake) {
                       content = (
                         <>
                           <div>Pending request to take this shift from {req.shift_owner}</div>
@@ -495,6 +545,9 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
               {allRelevantRequests.map((req, idx) => {
                 const isIncoming = req.target_employee_id === currentUserId;
                 const isActionable = isIncoming && (req.target_shift_id === shift.id || req.requesting_shift_id === shift.id);
+                const alreadyApproved = req.approved_by_target === true;
+                const requiresAdmin = req.requires_admin_approval === true;
+                const adminPending = alreadyApproved && requiresAdmin && !req.approved_by_admin;
                 return (
                   <li key={idx}>
                     {isIncoming ? (
@@ -515,10 +568,16 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
 
                     <div className="flex gap-4 mt-1">
                       {isActionable && (
-                        <>
-                          <button onClick={() => handleApprove(req.id)} className="text-green-600 hover:underline">Approve</button>
-                          <button onClick={() => handleReject(req.id)} className="text-red-600 hover:underline">Reject</button>
-                        </>
+                        adminPending ? (
+                          <div className="text-green-600 dark:text-green-400 font-medium">
+                            ✅ Accepted — pending admin approval
+                          </div>
+                        ) : (
+                          <>
+                            <button onClick={() => handleApprove(req.id)} className="text-green-600 hover:underline">Approve</button>
+                            <button onClick={() => handleReject(req.id)} className="text-red-600 hover:underline">Reject</button>
+                          </>
+                        )
                       )}
                       {!isIncoming && (
                         <button onClick={() => handleCancelSwap(req.id)} className="text-purple-600 hover:underline">Cancel</button>

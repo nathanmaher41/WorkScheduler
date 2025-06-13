@@ -21,7 +21,7 @@ export default function JoinCalendarModal({ onClose, onJoin }) {
         '#BCAAA4', '#8D6E63', '#3E2723'
     ];
 
-    const usedColors = new Set(calendar?.used_colors || []);
+    const usedColors = new Set((calendar?.used_colors || []).map(c => c.toUpperCase()));
 
     const handleCodeSubmit = async (e) => {
         e.preventDefault();
@@ -117,7 +117,8 @@ export default function JoinCalendarModal({ onClose, onJoin }) {
                                 <label className="block mb-2 font-medium">Pick a Color</label>
                                 <div className="flex flex-wrap gap-2 mb-2">
                                     {colors.map(color => {
-                                        const isUsed = usedColors.has(color);
+                                        const normalizedColor = color.toUpperCase();
+                                        const isUsed = usedColors.has(normalizedColor);
                                         return (
                                             <div className="relative" key={color}>
                                                 <button
@@ -126,7 +127,7 @@ export default function JoinCalendarModal({ onClose, onJoin }) {
                                                     disabled={isUsed}
                                                     className={`w-6 h-6 rounded-full border-2 transition ${
                                                         selectedColor === color ? 'border-black dark:border-white' :
-                                                            isUsed ? 'border-red-600' : 'border-transparent'
+                                                        isUsed ? 'border-red-600' : 'border-transparent'
                                                     }`}
                                                     style={{
                                                         backgroundColor: color,

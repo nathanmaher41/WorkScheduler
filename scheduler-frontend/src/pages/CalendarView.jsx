@@ -16,7 +16,9 @@ import RequestOffModal from '../components/RequestOffModal';
 import SettingsIcon from '../components/SettingsIcon';
 import TimeOffModal from '../components/TimeOffModal';
 import CalendarSettingsModal from '../components/CalendarSettingsModal';
-
+import { useNavigate } from 'react-router-dom';
+import HolidayModal from '../components/HolidayModal';
+import { useLocation } from 'react-router-dom';
 
 
 export default function CalendarView() {
@@ -50,8 +52,12 @@ export default function CalendarView() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [calendarRoles, setCalendarRoles] = useState([]);
   const [calendar, setCalendar] = useState(null);
+  const [effectivePermissions, setEffectivePermissions] = useState([]);
+  const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [selectedHoliday, setSelectedHoliday] = useState(null);
 
 
+  const navigate = useNavigate();
 
   useEffect(() => {
     // if (activeSchedule?.id) {
@@ -61,7 +67,7 @@ export default function CalendarView() {
 
   const fetchTimeOffs = async () => {
       try {
-        const res = await axios.get('/api/time-off/');
+        const res = await axios.get(`/api/calendars/${id}/timeoff/`);
         setTimeOffRequests(res.data);
       } catch (err) {
         console.error('Failed to fetch time off requests:', err);
@@ -72,6 +78,7 @@ export default function CalendarView() {
     fetchTimeOffs();
   }, []);
 
+  
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -169,7 +176,7 @@ export default function CalendarView() {
       let freshTimeOffs = timeOffsOverride;
         if (!freshTimeOffs) {
           try {
-            const res = await axios.get('/api/time-off/');
+            const res = await axios.get(`/api/calendars/${id}/timeoff/`);
             freshTimeOffs = res.data;
             setTimeOffRequests(res.data);
           } catch (err) {
@@ -178,19 +185,35 @@ export default function CalendarView() {
           }
         }
         const timeOffEvents = activeSchedule?.isDefault
-          ? freshTimeOffs.map(req => {
-              const memberColor = req.color || members.find((m) => m.id === req.employee)?.color || '#8b5cf6';
-              return {
-                id: `timeoff-${req.id}`,
-                title: `${req.employee_name || 'Unknown'}\nOff Work`,
-                start: parseLocalDate(req.start_date),
-                end: new Date(parseLocalDate(req.end_date).getTime() + 86400000),
-                allDay: true,
-                backgroundColor: memberColor,
-                textColor: 'white',
-                extendedProps: { type: 'timeoff', timeOffData: { ...req, calendar: id } },
-              };
-            })
+          ? freshTimeOffs
+              .filter((req) =>
+                req.status === 'approved' ||
+                (req.status === 'pending' && req.employee === currentUserId)
+              )
+              .map((req) => {
+                const memberColor =
+                  req.color ||
+                  members.find((m) => m.id === req.employee)?.color ||
+                  '#8b5cf6';
+
+                const isPending = req.status === 'pending' && req.employee === currentUserId;
+
+                return {
+                  id: `timeoff-${req.id}`,
+                  title: isPending
+                    ? `${req.employee_name || 'Unknown'}\n(Pending Approval)`
+                    : `${req.employee_name || 'Unknown'}\nOff Work`,
+                  start: parseLocalDate(req.start_date),
+                  end: new Date(parseLocalDate(req.end_date).getTime() + 86400000),
+                  allDay: true,
+                  backgroundColor: memberColor,
+                  textColor: 'white',
+                  extendedProps: {
+                    type: 'timeoff',
+                    timeOffData: { ...req, calendar: id },
+                  },
+                };
+              })
           : [];
           const to12Hour = (t) => {
             const [h, m] = t.split(':');
@@ -211,7 +234,7 @@ export default function CalendarView() {
                 const note = h.title?.trim()
                   ? (isAltered
                       ? `⚠️ ${h.title}\n${to12Hour(h.start_time)} - ${to12Hour(h.end_time)}`
-                      : `${h.title}\n\u200B`)
+                      : `${h.title}${h.note?.trim() ? `\n${h.note}` : '\n\u200B'}`)
                   : (isAltered
                       ? `⚠️ Altered Hours:\n${to12Hour(h.start_time)} - ${to12Hour(h.end_time)}`
                       : '🚫 Holiday\nNo Work');
@@ -265,7 +288,23 @@ export default function CalendarView() {
     });
   };
 
+  useEffect(() => {
+    const fetchEffectivePermissions = async () => {
+      const currentMember = members.find((m) => m.user === currentUserId); // ✅ not m.id
+      if (!currentMember) return;
 
+      try {
+        const res = await axios.get(`/api/calendars/${id}/members/${currentMember.id}/effective-permissions/`);
+        setEffectivePermissions(res.data.permissions); // ✅ use "permissions" wrapper
+      } catch (err) {
+        console.error('Failed to fetch effective permissions:', err);
+      }
+    };
+
+    if (members.length > 0 && currentUserId) {
+      fetchEffectivePermissions();
+    }
+  }, [id, members, currentUserId]);
 
 
   useEffect(() => {
@@ -393,6 +432,7 @@ export default function CalendarView() {
   const handleEventClick = (info) => {
     console.log('🧠 clicked event:', info.event.extendedProps);
     const type = info.event.extendedProps?.type;
+
     if (type === 'timeoff') {
       const request = info.event.extendedProps.timeOffData;
       setSelectedTimeOff({
@@ -403,10 +443,20 @@ export default function CalendarView() {
       return;
     }
 
+    if (type === 'holiday') {
+      const holiday = info.event.extendedProps.holidayData;
+      if (isCalendarAdmin || effectivePermissions.includes('manage_holidays')) {
+        setSelectedHoliday(holiday);
+        setShowHolidayModal(true);
+      }
+      return;
+    }
+
     const shift = info.event.extendedProps.shiftData;
     setSelectedShift(shift);
     setShowSwapModal(true);
   };
+
 
   const handleNotificationClick = async (note) => {
     const shiftId = note.related_object_id;
@@ -533,6 +583,9 @@ export default function CalendarView() {
     }
   };
 
+  const filteredTimeOffs = timeOffRequests.filter((r) =>
+    (r.status || '').toLowerCase() !== 'rejected'
+  );
 
 
 
@@ -557,7 +610,15 @@ export default function CalendarView() {
                 </span>
               )}
             </button>
-            <button onClick={() => setShowSettingsModal(true)}><SettingsIcon/></button>
+            <button className="bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600" onClick={() => setShowSettingsModal(true)}><SettingsIcon/></button>
+            {isCalendarAdmin && (
+            <button
+              className="bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600"
+              onClick={() => navigate(`/calendar/${id}/admin`)}
+            >
+              Admin Panel
+            </button>
+          )}
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded shadow p-4">
@@ -654,7 +715,7 @@ export default function CalendarView() {
               members={members}
               onSwapComplete={refreshShifts}
               isAdmin={isCalendarAdmin}
-              timeOffRequests={timeOffRequests}
+              timeOffRequests={filteredTimeOffs}
             />
           )}
         </div>
@@ -742,7 +803,7 @@ export default function CalendarView() {
           isOpen={showShiftModal}
           onClose={() => setShowShiftModal(false)}
           calendarId={id}
-          timeOffRequests={timeOffRequests}
+          timeOffRequests={filteredTimeOffs}
           scheduleId={activeSchedule?.id}
           selectedDate={selectedDate}
           members={members}
@@ -781,7 +842,7 @@ export default function CalendarView() {
           calendarId={id}
           isAdmin={isCalendarAdmin}
           onRequestSubmitted={async (updatedHolidays = null) => {
-          const timeOffRes = await axios.get('/api/time-off/');
+          const timeOffRes = await axios.get(`/api/calendars/${id}/timeoff/`);
             setTimeOffRequests(timeOffRes.data);
             if (updatedHolidays) {
               setWorkplaceHolidays(updatedHolidays);
@@ -805,7 +866,7 @@ export default function CalendarView() {
           currentUserId={currentUserId}
           onDelete={async () => {
             setShowTimeOffModal(false);
-            const res = await axios.get('/api/time-off/');
+            const res = await axios.get(`/api/calendars/${id}/timeoff/`);
             setTimeOffRequests(res.data);
             await refreshShifts(activeSchedule, res.data);
           }}
@@ -826,6 +887,25 @@ export default function CalendarView() {
           currentMember={members.find((m) => m.id === currentUserId)}
         />
       )}
+      <HolidayModal
+        isOpen={showHolidayModal}
+        onClose={() => setShowHolidayModal(false)}
+        holiday={selectedHoliday}
+        calendarId={id}
+        isAdmin={isCalendarAdmin}
+        effectivePermissions={effectivePermissions}
+        onUpdateHoliday={async (updated) => {
+          const holidaysRes = await axios.get(`/api/calendars/${id}/holidays/`);
+          setWorkplaceHolidays(holidaysRes.data);
+          await refreshShifts(activeSchedule, timeOffRequests, holidaysRes.data);
+        }}
+        onDeleteHoliday={async (deletedId) => {
+          const holidaysRes = await axios.get(`/api/calendars/${id}/holidays/`);
+          setWorkplaceHolidays(holidaysRes.data);
+          await refreshShifts(activeSchedule, timeOffRequests, holidaysRes.data);
+          setShowHolidayModal(false);
+        }}
+      />
       {showScheduleModal && (
         <ScheduleCreateModal
           isOpen={showScheduleModal}

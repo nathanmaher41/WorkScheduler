@@ -24,22 +24,24 @@ instance.interceptors.response.use(
       !originalRequest._retry &&
       localStorage.getItem('refresh')
     ) {
+      console.warn('🔄 Attempting token refresh...');
       originalRequest._retry = true;
       try {
         const res = await axios.post('http://localhost:8000/api/refresh/', {
           refresh: localStorage.getItem('refresh'),
         });
 
-        // Save new access token
+        console.log('✅ Token refresh successful:', res.data);
+
         localStorage.setItem('access', res.data.access);
 
-        // Retry original request with new token
         originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
         return instance(originalRequest);
       } catch (refreshError) {
+        console.error('❌ Token refresh failed:', refreshError.response?.data || refreshError);
         localStorage.removeItem('access');
         localStorage.removeItem('refresh');
-        window.location.href = '/login';
+        //window.location.href = '/login';
       }
     }
 

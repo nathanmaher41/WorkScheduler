@@ -23,8 +23,9 @@ export default function ShiftCreateModal({
   const [startPeriod, setStartPeriod] = useState('AM');
   const [endPeriod, setEndPeriod] = useState('PM');
   const [role, setRole] = useState('');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(existingShift?.notes || '');
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
 
   const selectedStr = new Date(selectedDate).toISOString().split('T')[0];
 
@@ -264,11 +265,16 @@ export default function ShiftCreateModal({
               <option value="">Select...</option>
               {members.filter(m => {
                 if (!m || !m.id) return false;
+                console.log('Checking member:', m.id, 'against time off:', timeOffRequests);
                 const getDayStr = (date) => date.toISOString().split('T')[0];
                 const isOff = timeOffRequests.some(req => {
                   if (req.employee !== m.id) return false;
-                  const selectedStr = getDayStr(new Date(selectedDate));
-                  return selectedStr >= req.start_date && selectedStr <= req.end_date;
+                  if ((req.status || '').toLowerCase() !== 'approved') return false;
+                  const selected = new Date(selectedDate);
+                  const start = new Date(req.start_date);
+                  const end = new Date(req.end_date);
+
+                  return selected >= start && selected <= end;
                 });
                 return !isOff;
               }).map((member) => (
@@ -341,6 +347,7 @@ export default function ShiftCreateModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
+              placeholder="Optional notes about this shift"
             />
           </div>
 

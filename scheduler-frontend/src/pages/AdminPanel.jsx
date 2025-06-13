@@ -30,6 +30,7 @@ export default function AdminPanel() {
   const [members, setMembers] = useState([]);
   const [allPermissions, setAllPermissions] = useState([]);
   const [currentUserId, setCurrentUserId] = useState([]);
+  const [memberPermissions, setMemberPermissions] = useState([]);
 
   // const location = useLocation();
   // const { state } = location;
@@ -63,10 +64,13 @@ export default function AdminPanel() {
         setCurrentUserId(userRes.data.id);
         setAllPermissions(permissionsRes.data);
 
-        const effectivePerms = await axios.get(
-          `/api/calendars/${calendarId}/members/${userRes.data.id}/effective-permissions/`
-        );
-        setMemberPermissions(effectivePerms.data);
+        const userMembership = membersRes.data.find(m => m.id === userRes.data.id);
+          if (!userMembership) throw new Error("Current user not found in members list");
+
+          const effectivePerms = await axios.get(
+            `/api/calendars/${calendarId}/members/${userMembership.membership_id}/effective-permissions/`
+          );
+          setMemberPermissions(effectivePerms.data);
 
       } catch (err) {
         console.error('Failed to load calendar, members, or user:', err);
@@ -117,7 +121,8 @@ export default function AdminPanel() {
             transition={{ duration: 0.3 }}
             className="flex-1 p-4 bg-white dark:bg-gray-800 rounded shadow"
           >
-            {activeTab === 'members' &&<MembershipManagementPanel calendarId={calendarId} roles={calendarRoles} currentUserId={currentUserId} permissions={allPermissions}/>}
+            {activeTab === 'members' &&<MembershipManagementPanel calendarId={calendarId} roles={calendarRoles} currentUserId={currentUserId} permissions={memberPermissions}
+            allPermissions={allPermissions} members={members}/>}
             {activeTab === 'roles' && <RolesPanel calendarId={calendarId} roles={calendarRoles} />}
             {activeTab === 'permissions' && (
               <PermissionsPanel

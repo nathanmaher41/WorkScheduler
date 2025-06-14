@@ -49,8 +49,17 @@ export default function ScheduleCard({
           {showDropdown && (
             <div
               ref={dropdownRef}
-              className="absolute right-0 mt-1 w-28 bg-white dark:bg-gray-800 shadow-lg rounded z-10 text-sm"
+              className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 shadow-lg rounded z-10 text-sm"
             >
+              <button
+                onClick={() => {
+                  setShowDropdown(false);
+                  onNotifySchedule?.(schedule);  // NEW
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                Notify of Changes
+              </button>
               <button
                 onClick={() => {
                   setShowDropdown(false);

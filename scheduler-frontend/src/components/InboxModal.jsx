@@ -57,6 +57,18 @@ export default function InboxModal({ isOpen, onClose, onNotificationClick, calen
     // TODO: route to shift modal or schedule etc. using note.related_object_id
   };
 
+  const confirmSchedule = async (note) => {
+    try {
+      await axios.post(`/api/schedules/${note.related_object_id}/confirm/`);
+      await axios.patch(`/api/inbox/${note.id}/`, { is_read: true, is_active: false });
+      setNotifications(prev =>
+        prev.map(n => n.id === note.id ? { ...n, is_read: true, is_active: false } : n)
+      );
+    } catch (err) {
+      console.error('Failed to confirm schedule:', err);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -120,8 +132,21 @@ export default function InboxModal({ isOpen, onClose, onNotificationClick, calen
               >
                 <p className="text-sm text-gray-900 dark:text-white">{note.message}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {new Date(note.created_at).toLocaleDateString() + ', ' + new Date(note.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  {new Date(note.created_at).toLocaleDateString() + ', ' +
+                  new Date(note.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                 </p>
+
+                {note.notification_type === 'SCHEDULE_RELEASE' && note.is_active && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent triggering handleNotificationClick
+                      confirmSchedule(note);
+                    }}
+                    className="mt-2 px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                  >
+                    ✅ Confirm
+                  </button>
+                )}
               </li>
             ))}
           </ul>

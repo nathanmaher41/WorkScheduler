@@ -99,7 +99,7 @@ export default function ScheduleCreateModal({
                   if (date) setStartDate(formatDateLocal(date));
                 }}
                 dateFormat="MM/dd/yyyy"
-                className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
+                className="w-full border roxunded px-3 py-2 dark:bg-gray-700 dark:text-white"
                 placeholderText="Select start date"
               />
             {/* <input

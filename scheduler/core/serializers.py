@@ -15,6 +15,7 @@ from .models import(
     InboxNotification,
     WorkplaceHoliday,
     CalendarPermission,
+    ScheduleConfirmation,
 )
 
 
@@ -46,16 +47,29 @@ class ScheduleCreateSerializer(serializers.ModelSerializer):
 
 class ScheduleListSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    #require_admin_swap_approval = serializers.BooleanField()
+    confirmation_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Schedule
-        fields = ['id', 'name', 'start_date', 'end_date', 'is_published', 'role']#'require_admin_swap_approval'
+        fields = [
+            'id',
+            'name',
+            'start_date',
+            'end_date',
+            'is_published',
+            'role',
+            'confirmation_count',
+        ]
 
     def get_role(self, obj):
         user = self.context['request'].user
         membership = ScheduleMembership.objects.filter(schedule=obj, user=user).first()
         return membership.role if membership else None
+
+    def get_confirmation_count(self, obj):
+        confirmed = obj.scheduleconfirmation_set.count()
+        total = ScheduleMembership.objects.filter(schedule=obj).count()
+        return f"{confirmed}/{total}"
 
 User = get_user_model()
 
@@ -379,21 +393,6 @@ class ShiftTakeRequestSerializer(serializers.ModelSerializer):
     def get_requires_admin_approval(self, obj):
         return obj.shift.schedule.calendar.require_take_approval
 
-class InboxNotificationSerializer(serializers.ModelSerializer):
-    calendar = serializers.SerializerMethodField()
-
-    class Meta:
-        model = InboxNotification
-        fields = ['id', 'notification_type', 'message', 'created_at', 'is_read', 'is_active', 'related_object_id', 'calendar']
-
-    def get_calendar(self, obj):
-        if obj.calendar:
-            return {
-                'id': obj.calendar.id,
-                'name': obj.calendar.name
-            }
-        return None
-
 class TimeOffRequestSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField(read_only=True)
     calendar = serializers.PrimaryKeyRelatedField(read_only=True) 
@@ -438,3 +437,90 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             "password": password
         })
         return data
+
+class InboxNotificationSerializer(serializers.ModelSerializer):
+    calendar = serializers.SerializerMethodField()
+    sender_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InboxNotification
+        fields = [
+            'id',
+            'notification_type',
+            'message',
+            'created_at',
+            'is_read',
+            'is_active',
+            'related_object_id',
+            'calendar',
+            'sender_name',
+        ]
+
+    def get_calendar(self, obj):
+        if obj.calendar:
+            return {
+                'id': obj.calendar.id,
+                'name': obj.calendar.name
+            }
+        return None
+
+    def get_sender_name(self, obj):
+        if obj.sender_display:
+            return obj.sender_display
+        if obj.sender:
+            return f"{obj.sender.first_name} {obj.sender.last_name}".strip() or obj.sender.username
+        return "Unknown"
+
+class ScheduleDetailSerializer(serializers.ModelSerializer):
+    confirmed_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Schedule
+        fields = ['id', 'name', 'start_date', 'end_date', 'is_published', 'confirmed_by']
+
+    def get_confirmed_by(self, obj):
+        confirmations = ScheduleConfirmation.objects.filter(schedule=obj).select_related('user')
+        return [
+            {
+                'id': sc.user.id,
+                'username': sc.user.username,
+                'first_name': sc.user.first_name,
+                'last_name': sc.user.last_name,
+                'confirmed_at': sc.confirmed_at,
+            }
+            for sc in confirmations
+        ]
+
+class ScheduleWithConfirmationsSerializer(serializers.ModelSerializer):
+    confirmed_members = serializers.SerializerMethodField()
+    unconfirmed_members = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Schedule
+        fields = [
+            'id', 'name', 'start_date', 'end_date',
+            'is_published', 'confirmed_members', 'unconfirmed_members'
+        ]
+
+    def get_confirmed_members(self, obj):
+        confirmations = ScheduleConfirmation.objects.filter(schedule=obj).select_related('user')
+        return [
+            {
+                'id': sc.user.id,
+                'first_name': sc.user.first_name,
+                'last_name': sc.user.last_name,
+            }
+            for sc in confirmations
+        ]
+
+    def get_unconfirmed_members(self, obj):
+        all_members = ScheduleMembership.objects.filter(schedule=obj).select_related('user')
+        confirmed_ids = ScheduleConfirmation.objects.filter(schedule=obj).values_list('user_id', flat=True)
+        return [
+            {
+                'id': m.user.id,
+                'first_name': m.user.first_name,
+                'last_name': m.user.last_name,
+            }
+            for m in all_members if m.user.id not in confirmed_ids
+        ]

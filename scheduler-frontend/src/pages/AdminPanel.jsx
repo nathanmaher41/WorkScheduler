@@ -8,6 +8,9 @@ import RolesPanel from '../components/RolesPanel';
 import { useLocation } from 'react-router-dom';
 import PermissionsPanel from '../components/PermissionsPanel';
 import MembershipManagementPanel from '../components/MemberManagementPanel';
+import AnnouncementsPanel from '../components/AnnouncmentsPanel';
+import ScheduleManagementPanel from '../components/ScheduleManagementPanel';
+
 
 const tabs = [
   { key: 'members', label: 'Member Management' },
@@ -17,7 +20,7 @@ const tabs = [
   { key: 'swaps', label: 'Swaps & Takes' },
   { key: 'announcements', label: 'Announcements' },
   { key: 'history', label: 'Audit Log / History' },
-  { key: 'visibility', label: 'Schedule Visibility' },
+  { key: 'schedule', label: 'Schedule Management' },
 ];
 
 export default function AdminPanel() {
@@ -135,9 +138,9 @@ export default function AdminPanel() {
             )}
             {activeTab === 'timeoff' && <TimeOffRequestsPanel calendarId={calendarId} />}
             {activeTab === 'swaps' && <SwapsAndTakesPanel calendarId={calendarId} />} {/* ✅ */}
-            {activeTab === 'announcements' && <p>📣 Announcements UI goes here</p>}
+            {activeTab === 'announcements' && <AnnouncementsPanel calendarId={calendarId} />}
             {activeTab === 'history' && <p>🗂️ History UI goes here</p>}
-            {activeTab === 'visibility' && <p>📅 Schedule Visibility UI goes here</p>}
+            {activeTab === 'schedule' && <ScheduleManagementPanel calendarId={calendarId}/>}
           </motion.div>
         </div>
       </div>

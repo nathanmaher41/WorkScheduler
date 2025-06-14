@@ -67,6 +67,15 @@ from .views import (
     TimeOffApproveView,
     TimeOffRejectView,
     CalendarMemberDeleteView,
+    AnnouncementCreateView,
+    AnnouncementHistoryView,
+    ScheduleNotificationView,
+    ScheduleConfirmView,
+    ScheduleDetailView,
+    ScheduleConfirmationsView,
+    ScheduleConfirmationResetView,
+    ScheduleRemindUnconfirmedView
+    
 )
 
 
@@ -143,8 +152,14 @@ urlpatterns = [
     path('calendars/<int:calendar_id>/timeoff/<int:pk>/approve/', TimeOffApproveView.as_view()),
     path('calendars/<int:calendar_id>/timeoff/<int:pk>/reject/', TimeOffRejectView.as_view()),
     path('calendars/<int:calendar_id>/members/<int:user_id>/remove/', CalendarMemberDeleteView.as_view(), name='calendar-member-remove'),
-
-
+    path('calendars/<int:calendar_id>/announcements/send/', AnnouncementCreateView.as_view()),
+    path('calendars/<int:calendar_id>/announcements/', AnnouncementHistoryView.as_view()),
+    path('calendars/<int:calendar_id>/schedules/<int:schedule_id>/notify/', ScheduleNotificationView.as_view(), name='schedule-notify'),
+    path('schedules/<int:schedule_id>/confirm/', ScheduleConfirmView.as_view(), name='schedule-confirm'),
+    path('schedules/<int:schedule_id>/', ScheduleDetailView.as_view(), name='schedule-detail'),
+    path('schedules/<int:schedule_id>/confirmations/', ScheduleConfirmationsView.as_view(), name='schedule-confirmations'),
+    path('schedules/<int:schedule_id>/confirmations/reset/', ScheduleConfirmationResetView.as_view(), name='schedule-confirmation-reset'),
+    path('schedules/<int:schedule_id>/remind-unconfirmed/', ScheduleRemindUnconfirmedView.as_view()),
     
 
 ]

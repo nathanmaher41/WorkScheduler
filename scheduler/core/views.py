@@ -1,6 +1,8 @@
 from django.db import transaction
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.db import models
+from collections import defaultdict
+from datetime import timedelta
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 from rest_framework import generics, permissions, status
@@ -24,7 +26,8 @@ from .models import (
     ShiftTakeRequest,
     InboxNotification,
     WorkplaceHoliday,
-    CalendarPermission
+    CalendarPermission,
+    ScheduleConfirmation
 )
 from .serializers import (
     RegisterSerializer,
@@ -49,7 +52,8 @@ from .serializers import (
     WorkplaceHolidaySerializer,
     CalendarPermissionSerializer,
     CalendarMembershipPermissionSerializer,
-    CustomTokenObtainPairSerializer
+    CustomTokenObtainPairSerializer,
+    ScheduleWithConfirmationsSerializer
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -67,6 +71,7 @@ from django.db.utils import IntegrityError
 import string
 import random
 from rest_framework.exceptions import PermissionDenied
+from django.db.models import OuterRef, Subquery
 
 User = get_user_model()
 
@@ -1391,6 +1396,15 @@ class CalendarMemberPermissionsUpdateView(APIView):
         member.custom_permissions.set(custom_perms)
         member.excluded_permissions.set(excluded_perms)
 
+        # Calculate effective permissions
+        final_perms = (role_perms | custom_perms) - excluded_perms
+        granted_codenames = {perm.codename for perm in final_perms}
+
+        # Check if member has all possible permissions
+        all_possible = set(CalendarPermission.objects.values_list('codename', flat=True))
+        member.is_admin = granted_codenames == all_possible
+        member.save()
+
         return Response({"message": "Member permissions updated."})
 
 
@@ -1589,3 +1603,175 @@ class CalendarMemberDeleteView(APIView):
 
         membership.delete()
         return Response({"message": "Member removed from calendar and shifts deleted."}, status=204)
+
+class AnnouncementCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, calendar_id):
+        message = request.data.get('message')
+        sender_display = request.data.get('sender_name')  # optional override
+
+        if not message:
+            return Response({'error': 'Message is required'}, status=400)
+
+        members = CalendarMembership.objects.filter(calendar_id=calendar_id).select_related('user')
+
+        notifications = [
+            InboxNotification(
+                user=member.user,
+                calendar_id=calendar_id,
+                notification_type='ANNOUNCEMENT',
+                message=message,
+                sender=request.user,
+                sender_display=sender_display or None
+            )
+            for member in members
+        ]
+        InboxNotification.objects.bulk_create(notifications)
+
+        return Response({'message': 'Announcement sent!'})
+
+class AnnouncementHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id):
+        all_announcements = InboxNotification.objects.filter(
+            calendar_id=calendar_id,
+            notification_type='ANNOUNCEMENT'
+        ).select_related('sender').order_by('-created_at')
+
+        grouped = {}
+        for notif in all_announcements:
+            key = (
+                notif.message.strip(),
+                notif.sender_id or notif.sender_display
+            )
+            # Store the first one only (most recent due to ordering)
+            if key not in grouped:
+                grouped[key] = notif
+
+        serializer = InboxNotificationSerializer(grouped.values(), many=True)
+        return Response(serializer.data)
+
+class ScheduleNotificationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, calendar_id, schedule_id):
+        try:
+            schedule = Schedule.objects.get(id=schedule_id, calendar_id=calendar_id)
+        except Schedule.DoesNotExist:
+            return Response({'error': 'Schedule not found'}, status=404)
+
+        members = CalendarMembership.objects.filter(calendar_id=calendar_id).select_related('user')
+        
+        # ✅ Include optional notes
+        release_notes = request.data.get('notes', '').strip()
+        message = f"A new schedule has been released: {schedule.name or schedule.start_date}.\n"
+        if release_notes:
+            message += f"\n\n**Rlease Notes:**\n{release_notes}"
+
+        # Step 1: Deactivate old notifications
+        InboxNotification.objects.filter(
+            related_object_id=schedule_id,
+            notification_type='SCHEDULE_RELEASE'
+        ).update(is_active=False, is_read=True)
+
+        # Step 2: Create new notifications
+        notifications = [
+            InboxNotification(
+                user=member.user,
+                calendar_id=calendar_id,
+                notification_type='SCHEDULE_RELEASE',
+                related_object_id=schedule_id,
+                message=message,
+                is_active=True,
+                is_read=False
+            )
+            for member in members
+        ]
+
+        InboxNotification.objects.bulk_create(notifications)
+        return Response({'message': 'Schedule release notification sent!'})
+
+class ScheduleConfirmView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, schedule_id):
+        schedule = get_object_or_404(Schedule, id=schedule_id)
+        ScheduleConfirmation.objects.get_or_create(user=request.user, schedule=schedule)
+
+        # Optionally deactivate notification
+        InboxNotification.objects.filter(
+            user=request.user,
+            related_object_id=schedule_id,
+            notification_type='SCHEDULE_CONFIRMATION'
+        ).update(is_active=False, is_read=True)
+
+        return Response({'message': 'Schedule confirmed.'})
+
+class ScheduleDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, schedule_id):
+        schedule = get_object_or_404(Schedule, id=schedule_id)
+        serializer = ScheduleDetailSerializer(schedule)
+        return Response(serializer.data)
+
+class ScheduleConfirmationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, schedule_id):
+        schedule = get_object_or_404(Schedule, id=schedule_id)
+        serializer = ScheduleWithConfirmationsSerializer(schedule)
+        return Response(serializer.data)
+
+class ScheduleConfirmationResetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, schedule_id):
+        schedule = get_object_or_404(Schedule, id=schedule_id)
+
+        # Only allow calendar admins or users with a certain permission (optional)
+        # if not request.user.is_staff: ...
+
+        ScheduleConfirmation.objects.filter(schedule=schedule).delete()
+
+        return Response({'message': 'Confirmations reset successfully.'}, status=200)
+
+class ScheduleRemindUnconfirmedView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, schedule_id):
+        schedule = get_object_or_404(Schedule, id=schedule_id)
+        calendar = schedule.calendar
+        sender = request.user
+
+        # Find confirmed users
+        confirmed_user_ids = ScheduleConfirmation.objects.filter(
+            schedule=schedule
+        ).values_list('user_id', flat=True)
+
+        # Get all members who are not in the confirmed list
+        unconfirmed_members = ScheduleMembership.objects.filter(
+            schedule=schedule
+        ).exclude(user__id__in=confirmed_user_ids)
+
+        notifications = []
+        for membership in unconfirmed_members:
+            user = membership.user
+            msg = (
+                f"Reminder: A new schedule **{schedule.name}** has been released.\n\n"
+                "REMINDER: Please confirm that you have seen and viewed the schedule."
+            )
+            notifications.append(InboxNotification(
+                user=user,
+                calendar=calendar,
+                message=msg,
+                related_object_id=schedule.id,  # ✅ Use related_object_id
+                notification_type="SCHEDULE_RELEASE",  # ✅ Use notification_type
+                sender=sender,
+            ))
+
+        InboxNotification.objects.bulk_create(notifications)
+
+        return Response({'status': 'reminders sent'})

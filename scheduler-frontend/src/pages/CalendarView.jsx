@@ -20,7 +20,6 @@ import { useNavigate } from 'react-router-dom';
 import HolidayModal from '../components/HolidayModal';
 import { useLocation } from 'react-router-dom';
 
-
 export default function CalendarView() {
   const { id } = useParams();
   const [events, setEvents] = useState([]);
@@ -595,6 +594,14 @@ export default function CalendarView() {
     <div className="flex p-6 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <div className="flex-1 mr-6">
         <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-black dark:text-white rounded hover:bg-gray-300 dark:hover:bg-gray-600 text-sm"
+            >
+              ← Back to Dashboard
+            </button>
+          </div>
           <h1 className="text-2xl font-bold">
             Calendar View {activeSchedule && `— ${activeSchedule.name}`}
           </h1>

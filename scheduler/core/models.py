@@ -175,16 +175,21 @@ class InboxNotification(models.Model):
         ('TAKE_REQUEST', 'Take Request'),
         ('SCHEDULE_RELEASE', 'Schedule Release'),
         ('REQUEST_OFF_APPROVAL', 'Request Off Approval'),
-        # Add more as needed
+        ('ANNOUNCEMENT', 'Announcement'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    sender = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_notifications'
+    )
+    sender_display = models.CharField(max_length=100, blank=True, null=True)
+
     notification_type = models.CharField(max_length=32, choices=NOTIFICATION_TYPES)
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    related_object_id = models.IntegerField(null=True, blank=True)  # optional: link to shift/schedule/etc.
+    related_object_id = models.IntegerField(null=True, blank=True)
     calendar = models.ForeignKey(Calendar, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
 
     def __str__(self):
@@ -210,3 +215,14 @@ class WorkplaceHoliday(models.Model):
 
     def __str__(self):
         return f"{self.calendar.name} — {self.date} ({self.get_type_display()})"
+
+class ScheduleConfirmation(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    schedule = models.ForeignKey(Schedule, on_delete=models.CASCADE)
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'schedule')
+
+    def __str__(self):
+        return f"{self.user.username} confirmed {self.schedule.name}"

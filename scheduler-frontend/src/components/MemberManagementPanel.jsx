@@ -12,6 +12,7 @@ export default function MembershipManagementPanel({
 }) {
     const [localMembers, setLocalMembers] = useState(members);
     const [editingColorMemberId, setEditingColorMemberId] = useState(null);
+    const [confirmRemoveMember, setConfirmRemoveMember] = useState(null);
     const currentUserMembership = members.find(m => m.id === currentUserId);
     const isAdmin = currentUserMembership?.is_admin;
     const hasPermission = (perm) =>
@@ -37,12 +38,6 @@ export default function MembershipManagementPanel({
         console.error('Failed to update role:', err);
     }
     };
-
-    const handleRemoveMember = async (memberId) => {
-    // Placeholder — you'll build this out later
-    alert(`🔴 Remove member ${memberId} (not yet implemented)`);
-    };
-
     const availableColors = [
     '#FF8A80', '#F8BBD0', '#E53935', '#B71C1C', '#D81B60', '#880E4F',
     '#FFD180', '#E65100', '#FFF59D', '#FFEB3B', '#F9A825', '#A5D6A7',
@@ -51,6 +46,15 @@ export default function MembershipManagementPanel({
     '#8D6E63', '#3E2723'
     ];
 
+    const handleRemoveMember = async (memberId, memberName) => {
+        try {
+            await axios.delete(`/api/calendars/${calendarId}/members/${memberId}/remove/`);
+            setLocalMembers(prev => prev.filter(m => m.id !== memberId));
+            setConfirmRemoveMember(null); // close the modal
+        } catch (err) {
+            console.error('Failed to remove member:', err);
+        }
+    };
     useEffect(() => {
         setLocalMembers(members);
     }, [members]);
@@ -162,10 +166,10 @@ export default function MembershipManagementPanel({
                 <td className="p-2">
                     {hasPermission('invite_remove_members') && m.id !== currentUserId && (
                     <button
-                        onClick={() => handleRemoveMember(m.id)}
-                        className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                    onClick={() => setConfirmRemoveMember({ id: m.id, name: m.full_name || m.username })}
+                    className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
                     >
-                        Remove
+                    Remove
                     </button>
                     )}
                 </td>
@@ -173,6 +177,40 @@ export default function MembershipManagementPanel({
             ))}
             </tbody>
         </table>
+        {confirmRemoveMember && (
+            <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex justify-center items-center">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full">
+                <h4 className="text-lg font-semibold mb-4 text-black dark:text-white text-center">
+                    Remove {confirmRemoveMember.name} from calendar?
+                </h4>
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 text-center">
+                    This will <strong>remove all of their shifts</strong>. Are you sure you want to continue?
+                </p>
+                <div className="flex justify-center gap-3">
+                    <button
+                    onClick={() => setConfirmRemoveMember(null)}
+                    className="px-4 py-2 bg-gray-300 dark:bg-gray-700 text-black dark:text-white rounded hover:bg-gray-400 dark:hover:bg-gray-600"
+                    >
+                    Cancel
+                    </button>
+                    <button
+                    onClick={async () => {
+                        try {
+                        await axios.delete(`/api/calendars/${calendarId}/members/${confirmRemoveMember.id}/remove/`);
+                        setLocalMembers(prev => prev.filter(m => m.id !== confirmRemoveMember.id));
+                        setConfirmRemoveMember(null);
+                        } catch (err) {
+                        console.error('Failed to remove member:', err);
+                        }
+                    }}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                    >
+                    Remove
+                    </button>
+                </div>
+                </div>
+            </div>
+            )}
         </div>
     </div>
     );

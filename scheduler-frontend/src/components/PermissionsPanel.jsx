@@ -12,7 +12,6 @@ export default function PermissionsPanel({ calendarId, calendar, roles: initialR
   const [permissionMap, setPermissionMap] = useState({});
   const [saveStatus, setSaveStatus] = useState(null);
 
-
   useEffect(() => {
     if (initialMembers.length === 0) {
       axios.get(`/api/calendars/${calendarId}/members/`).then((res) => setMembers(res.data));
@@ -23,7 +22,7 @@ export default function PermissionsPanel({ calendarId, calendar, roles: initialR
   }, [calendarId, initialMembers, initialRoles]);
 
   const { self_role_change_allowed, allow_swap_without_approval, require_take_approval } = calendar || {};
-  
+
   useEffect(() => {
     if (!selectedTargetId || permissionMode === 'Overview') return;
 

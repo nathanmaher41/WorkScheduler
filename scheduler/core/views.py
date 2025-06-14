@@ -1572,4 +1572,20 @@ class TimeOffRejectView(APIView):
         # TODO: Create inbox notification for rejection (we'll add this after)
         return Response({'success': 'Time off rejected.'}, status=200)
 
-        
+class CalendarMemberDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, calendar_id, user_id):
+        try:
+            calendar = Calendar.objects.get(id=calendar_id)
+            membership = CalendarMembership.objects.get(calendar=calendar, user_id=user_id)
+        except (Calendar.DoesNotExist, CalendarMembership.DoesNotExist):
+            return Response({"error": "Calendar or membership not found."}, status=404)
+
+        if not CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists():
+            return Response({"error": "You do not have permission to remove members."}, status=403)
+
+        Shift.objects.filter(schedule__calendar=calendar, employee_id=user_id).delete()
+
+        membership.delete()
+        return Response({"message": "Member removed from calendar and shifts deleted."}, status=204)

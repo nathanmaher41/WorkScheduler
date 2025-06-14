@@ -66,6 +66,7 @@ from .views import (
     CalendarTimeOffApprovalListView,
     TimeOffApproveView,
     TimeOffRejectView,
+    CalendarMemberDeleteView,
 )
 
 
@@ -141,6 +142,8 @@ urlpatterns = [
     path('calendars/<int:calendar_id>/timeoff/pending/', CalendarTimeOffApprovalListView.as_view()),
     path('calendars/<int:calendar_id>/timeoff/<int:pk>/approve/', TimeOffApproveView.as_view()),
     path('calendars/<int:calendar_id>/timeoff/<int:pk>/reject/', TimeOffRejectView.as_view()),
+    path('calendars/<int:calendar_id>/members/<int:user_id>/remove/', CalendarMemberDeleteView.as_view(), name='calendar-member-remove'),
+
 
     
 

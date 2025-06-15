@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import ShiftCreateModal from './ShiftCreateModal';
 
-export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete, isAdmin, timeOffRequests }) {
+export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete, isAdmin, timeOffRequests, calendarId }) {
   const [yourShifts, setYourShifts] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [memberShifts, setMemberShifts] = useState([]);

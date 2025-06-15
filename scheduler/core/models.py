@@ -153,6 +153,8 @@ class ShiftSwapRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     approved_by_target = models.BooleanField(default=False)
     approved_by_admin = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.requested_by.username} requests {self.target_shift} in exchange for {self.requesting_shift}"

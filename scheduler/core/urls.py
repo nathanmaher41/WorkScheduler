@@ -11,7 +11,6 @@ from .views import (
     ShiftCreateView,
     ShiftListView,
     ShiftSwapRequestView,
-    ShiftSwapApproveView,
     ShiftSwapAdminApproveView,
     IncomingSwapRequestsView,
     TimeOffRequestCreateView,
@@ -74,7 +73,8 @@ from .views import (
     ScheduleDetailView,
     ScheduleConfirmationsView,
     ScheduleConfirmationResetView,
-    ScheduleRemindUnconfirmedView
+    ScheduleRemindUnconfirmedView,
+    CalendarHistoryView,
     
 )
 
@@ -94,13 +94,10 @@ urlpatterns = [
     path('time-off/request/', TimeOffRequestCreateView.as_view(), name='time-off-create'),
     path('time-off/manage/<int:request_id>/', TimeOffRequestManageView.as_view(), name='time-off-manage'),
     path('schedules/<int:schedule_id>/time-off/', TimeOffRequestListView.as_view(), name='time-off-list'),
-    path('shifts/request-swap/', ShiftSwapRequestView.as_view(), name='shift-request-swap'),
-    path('shifts/<int:shift_id>/approve-swap/', ShiftSwapApproveView.as_view(), name='shift-approve-swap'),
     path('shifts/<int:shift_id>/reject-swap/', ShiftSwapRejectView.as_view(), name='shift-reject-swap'),
     path('shifts/my-incoming-swaps/', IncomingSwapRequestsView.as_view(), name='my-incoming-swaps'),
     path('schedules/<int:schedule_id>/settings/', ScheduleSettingsUpdateView.as_view(), name='schedule-settings'),
     path('shifts/swap/request/', ShiftSwapRequestView.as_view(), name='shift-swap-request'),
-    path('shifts/swap/approve/', ShiftSwapApproveView.as_view(), name='shift-swap-approve'),
     path('shifts/swap/admin-approve/', ShiftSwapAdminApproveView.as_view(), name='shift-swap-admin-approve'),
     path('activate/<uidb64>/<token>/', ActivateUserView.as_view(), name='activate-user'),
     path('user/settings/', UserSettingsView.as_view(), name='user-settings'),
@@ -160,6 +157,6 @@ urlpatterns = [
     path('schedules/<int:schedule_id>/confirmations/', ScheduleConfirmationsView.as_view(), name='schedule-confirmations'),
     path('schedules/<int:schedule_id>/confirmations/reset/', ScheduleConfirmationResetView.as_view(), name='schedule-confirmation-reset'),
     path('schedules/<int:schedule_id>/remind-unconfirmed/', ScheduleRemindUnconfirmedView.as_view()),
-    
+    path('calendars/<int:calendar_id>/history/', CalendarHistoryView.as_view(), name='calendar-history'),
 
 ]

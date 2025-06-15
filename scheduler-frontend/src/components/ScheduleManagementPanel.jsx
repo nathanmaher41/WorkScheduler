@@ -15,12 +15,23 @@ export default function ScheduleManagementPanel({ calendarId }) {
   const containerRef = useRef(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [confirmationData, setConfirmationData] = useState({ confirmed_members: [], unconfirmed_members: [] });
-
+  const [statusMessage, setStatusMessage] = useState(null);
+  const [statusVisible, setStatusVisible] = useState(false);
 
 
   useEffect(() => {
     fetchSchedules();
   }, []);
+
+  const showStatusMessage = (text, type = 'success') => {
+    setStatusMessage({ text, type });
+    setTimeout(() => setStatusVisible(true), 10); // slight delay ensures fade-in triggers
+
+    setTimeout(() => {
+        setStatusVisible(false); // fade out
+        setTimeout(() => setStatusMessage(null), 300); // remove from DOM after fade-out
+    }, 3000);
+    };
 
   const fetchSchedules = async () => {
     try {
@@ -73,8 +84,10 @@ export default function ScheduleManagementPanel({ calendarId }) {
     try {
       await axios.post(`/api/calendars/${calendarId}/schedules/${activeSchedule.id}/notify/`, { notes: releaseNotes });
       setReleaseNotes('');
+      showStatusMessage("📣 Calendar members have been notified of the schedule release.", "success");
     } catch (err) {
       console.error('Error pushing release:', err);
+      showStatusMessage("❌ An error occurred while sending the schedule.", "error");
     }
   };
 
@@ -82,16 +95,20 @@ export default function ScheduleManagementPanel({ calendarId }) {
     try {
       await axios.post(`/api/schedules/${activeSchedule.id}/confirmations/reset/`);
       await fetchConfirmations(activeSchedule.id);
+      showStatusMessage("✅ Confirmation list reset.", "success");
     } catch (err) {
       console.error('Error resetting confirmations:', err);
+      showStatusMessage("❌ An error occurred while resetting confirmations.", "error");
     }
   };
 
   const handleResendReminder = async () => {
     try {
       await axios.post(`/api/schedules/${activeSchedule.id}/remind-unconfirmed/`);
+      showStatusMessage("🔔 Calendar members who haven't confirmed have been reminded again.", "success");
     } catch (err) {
       console.error('Error resending reminders:', err);
+      showStatusMessage("❌ An error occurred while sending reminders.", "error");
     }
   };
 
@@ -190,6 +207,19 @@ export default function ScheduleManagementPanel({ calendarId }) {
               <button onClick={handleForceReset} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">Reset Confirmations</button>
               <button onClick={handleResendReminder} className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">Remind Unconfirmed</button>
             </div>
+            {statusMessage && (
+                <div
+                    className={`text-sm mt-2 px-3 py-2 rounded transition-opacity duration-300 ${
+                    statusVisible ? 'opacity-100' : 'opacity-0'
+                    } ${
+                    statusMessage.type === 'success'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
+                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100'
+                    }`}
+                >
+                    {statusMessage.text}
+                </div>
+                )}
             <div>
               <input
                 placeholder="Release notes (optional)"

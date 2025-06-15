@@ -10,17 +10,18 @@ import PermissionsPanel from '../components/PermissionsPanel';
 import MembershipManagementPanel from '../components/MemberManagementPanel';
 import AnnouncementsPanel from '../components/AnnouncmentsPanel';
 import ScheduleManagementPanel from '../components/ScheduleManagementPanel';
+import HistoryPanel from '../components/HistoryPanel';
 
 
 const tabs = [
   { key: 'members', label: 'Member Management' },
   { key: 'roles', label: 'Role Management' },
   { key: 'permissions', label: 'Permissions and Rules'},
+  { key: 'schedule', label: 'Schedule Management' },
   { key: 'timeoff', label: 'Time Off Requests' },
   { key: 'swaps', label: 'Swaps & Takes' },
   { key: 'announcements', label: 'Announcements' },
-  { key: 'history', label: 'Audit Log / History' },
-  { key: 'schedule', label: 'Schedule Management' },
+  { key: 'history', label: 'History Log' },
 ];
 
 export default function AdminPanel() {
@@ -136,11 +137,11 @@ export default function AdminPanel() {
                 onUpdateSettings={handleUpdateSettings}
               />
             )}
+            {activeTab === 'schedule' && <ScheduleManagementPanel calendarId={calendarId}/>}
             {activeTab === 'timeoff' && <TimeOffRequestsPanel calendarId={calendarId} />}
             {activeTab === 'swaps' && <SwapsAndTakesPanel calendarId={calendarId} />} {/* ✅ */}
             {activeTab === 'announcements' && <AnnouncementsPanel calendarId={calendarId} />}
-            {activeTab === 'history' && <p>🗂️ History UI goes here</p>}
-            {activeTab === 'schedule' && <ScheduleManagementPanel calendarId={calendarId}/>}
+            {activeTab === 'history' && <HistoryPanel calendarId={calendarId}/>}
           </motion.div>
         </div>
       </div>

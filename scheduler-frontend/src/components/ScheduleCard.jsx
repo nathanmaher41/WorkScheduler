@@ -6,7 +6,8 @@ export default function ScheduleCard({
   onSelect,
   isAdmin,
   onEdit,
-  onDelete
+  onDelete,
+  onNotifySchedule
 }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);

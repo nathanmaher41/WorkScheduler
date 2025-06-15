@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
+from rest_framework.fields import DateTimeField
 from .models import(
     Schedule, 
     ScheduleMembership, 
@@ -524,3 +525,66 @@ class ScheduleWithConfirmationsSerializer(serializers.ModelSerializer):
             }
             for m in all_members if m.user.id not in confirmed_ids
         ]
+
+class UnifiedHistorySerializer(serializers.Serializer):
+    type = serializers.SerializerMethodField()
+    timestamp = serializers.SerializerMethodField()
+    data = serializers.SerializerMethodField()
+
+    def get_type(self, obj):
+        if isinstance(obj, ShiftSwapRequest):
+            return 'swap_request'
+        elif isinstance(obj, ShiftTakeRequest):
+            return 'take_request'
+        elif isinstance(obj, TimeOffRequest):
+            return 'time_off'
+        elif isinstance(obj, InboxNotification) and obj.notification_type == 'SCHEDULE_RELEASE':
+            return 'schedule_release'
+        return 'unknown'
+
+    def get_timestamp(self, obj):
+        timestamp = getattr(obj, 'created_at', None)
+        if timestamp:
+            return DateTimeField().to_representation(timestamp)
+        return None
+
+    def get_data(self, obj):
+        if isinstance(obj, ShiftSwapRequest):
+            return {
+                'id': obj.id,
+                'requester': obj.requested_by.get_full_name(),
+                'target_user': obj.target_shift.employee.get_full_name() if obj.target_shift else None,
+                'requesting_shift_id': obj.requesting_shift.id,
+                'target_shift_id': obj.target_shift.id,
+                'approved_by_target': obj.approved_by_target,
+                'approved_by_admin': obj.approved_by_admin,
+            }
+
+        elif isinstance(obj, ShiftTakeRequest):
+            return {
+                'id': obj.id,
+                'requester': obj.requested_by.get_full_name(),
+                'target_user': obj.requested_to.get_full_name(),
+                'shift_id': obj.shift.id,
+                'approved_by_target': obj.approved_by_target,
+                'approved_by_admin': obj.approved_by_admin,
+            }
+
+        elif isinstance(obj, TimeOffRequest):
+            return {
+                'id': obj.id,
+                'user': obj.employee.get_full_name(),
+                'start_date': obj.start_date,
+                'end_date': obj.end_date,
+                'reason': obj.reason,
+                'status': obj.status,
+            }
+
+        elif isinstance(obj, InboxNotification):
+            return {
+                'id': obj.id,
+                'message': obj.message,
+                'sender': obj.sender.get_full_name() if obj.sender else 'System',
+            }
+
+        return {}

@@ -510,6 +510,19 @@ export default function CalendarView() {
     return dates;
   }
 
+  const handlePushRelease = async (schedule) => {
+    try {
+      await axios.post(`/api/calendars/${id}/schedules/${schedule.id}/notify/`, {
+        notes: ''  // Replace with a note input if needed
+      });
+      alert('📣 Notification sent!');
+    } catch (err) {
+      console.error('Error pushing release:', err);
+      alert('Failed to notify members.');
+    }
+  };
+
+
   const handleCalendarRename = async (calendarId, newName) => {
     try {
       await axios.patch(`/api/calendars/${calendarId}/`, { name: newName });
@@ -715,6 +728,7 @@ export default function CalendarView() {
           />
           {showSwapModal && selectedShift && (
             <ShiftSwapModal
+              calendarId={id}
               isOpen={showSwapModal}
               onClose={() => setShowSwapModal(false)}
               shift={selectedShift}
@@ -793,6 +807,7 @@ export default function CalendarView() {
                   isActive={activeSchedule?.id === schedule.id}
                   onSelect={handleScheduleSelect}
                   isAdmin={isCalendarAdmin}
+                  onNotifySchedule={(schedule) => handlePushRelease(schedule)}
                   onEdit={(s) => {
                     setEditingSchedule(s);
                     setShowScheduleModal(true);

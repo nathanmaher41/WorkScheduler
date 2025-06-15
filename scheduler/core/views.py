@@ -53,7 +53,8 @@ from .serializers import (
     CalendarPermissionSerializer,
     CalendarMembershipPermissionSerializer,
     CustomTokenObtainPairSerializer,
-    ScheduleWithConfirmationsSerializer
+    ScheduleWithConfirmationsSerializer,
+    UnifiedHistorySerializer
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -72,6 +73,10 @@ import string
 import random
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import OuterRef, Subquery
+from itertools import chain
+from operator import attrgetter
+from django.utils.dateparse import parse_date
+from django.utils.timezone import now
 
 User = get_user_model()
 
@@ -309,49 +314,6 @@ class ShiftSwapRequestView(APIView):
         return Response({"message": "Swap request submitted."})
 
 
-class ShiftSwapApproveView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        shift_a_id = request.data.get('requesting_shift_id')
-        shift_b_id = request.data.get('target_shift_id')
-
-        try:
-            shift_a = Shift.objects.get(id=shift_a_id)
-            shift_b = Shift.objects.get(id=shift_b_id)
-        except Shift.DoesNotExist:
-            return Response({"error": "One or both shifts not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if shift_b.employee != request.user:
-            return Response({"error": "You can only approve swaps involving your own shift."}, status=status.HTTP_403_FORBIDDEN)
-
-        schedule = shift_a.schedule
-        if shift_a.schedule != shift_b.schedule:
-            return Response({"error": "Shifts must belong to the same schedule."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not shift_a.is_swap_pending or shift_a.swap_requested_by is None:
-            return Response({"error": "No pending swap on this shift."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not schedule.calendar.allow_swap_without_approval:
-            shift_a.swap_approved_by = request.user
-            shift_a.save()
-            return Response({"message": "Swap approved by target employee, pending admin approval."})
-
-        # No admin approval needed — perform swap
-        with transaction.atomic():
-            shift_a_employee = shift_a.employee
-            shift_a.employee = shift_b.employee
-            shift_b.employee = shift_a_employee
-
-            shift_a.is_swap_pending = False
-            shift_a.swap_requested_by = None
-            shift_a.swap_approved_by = request.user
-
-            shift_a.save()
-            shift_b.save()
-
-        return Response({"message": "Shift swap completed successfully."})
-
 class IncomingSwapRequestsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -384,9 +346,9 @@ class IncomingSwapRequestsView(APIView):
 class ShiftSwapRejectView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request, shift_id):
+    def post(self, request, swap_id):
         try:
-            target_shift = Shift.objects.get(id=shift_id, employee=request.user)
+            target_shift = Shift.objects.get(id=swap_id, employee=request.user)
         except Shift.DoesNotExist:
             return Response({"error": "Shift not found or not yours."}, status=404)
 
@@ -744,10 +706,9 @@ class ShiftSwapAcceptView(APIView):
             return Response({"error": "Swap request not found."}, status=404)
 
         calendar = swap.target_shift.schedule.calendar
-
         is_target = swap.target_shift.employee == request.user
         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
-        self.calendar = calendar  # for permission class if needed
+        self.calendar = calendar
         has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
 
         if not (is_target or is_admin or has_perm):
@@ -755,7 +716,6 @@ class ShiftSwapAcceptView(APIView):
 
         requires_admin_approval = not calendar.allow_swap_without_approval
 
-        # Target approves — wait for admin
         if requires_admin_approval and is_target and not (is_admin or has_perm):
             swap.approved_by_target = True
             swap.save()
@@ -764,71 +724,43 @@ class ShiftSwapAcceptView(APIView):
                 "requires_admin_approval": True
             })
 
-        # Otherwise fully approve
-        swap.approved_by_target = True
-        swap.approved_by_admin = True
-        swap.save()
-
         with transaction.atomic():
             a = swap.requesting_shift
             b = swap.target_shift
             a_employee = a.employee
 
+            # Perform the employee swap
             a.employee = b.employee
             b.employee = a_employee
-
             a.save()
             b.save()
 
+            # Log approval (won’t survive deletion below)
+            swap.approved_by_target = True
+            swap.approved_by_admin = True
+            swap.is_active = False
+            swap.accepted_at = now()
+            swap.save()
+
+            # Notify requester before deletion
             InboxNotification.objects.create(
                 user=swap.requested_by,
                 notification_type='SWAP_REQUEST',
-                message=f"Your swap request for {format_shift_time(swap.requesting_shift)} was approved.",
-                related_object_id=swap.requesting_shift.id,
+                message=f"Your swap request for {format_shift_time(a)} was approved.",
+                related_object_id=a.id,
                 calendar=calendar
             )
 
+            # ❗ Delete ALL swaps involving either shift, INCLUDING this one
             ShiftSwapRequest.objects.filter(
                 models.Q(requesting_shift=a) | models.Q(target_shift=a) |
                 models.Q(requesting_shift=b) | models.Q(target_shift=b)
-            ).exclude(id=swap.id).delete()
-
-            swap.delete()
+            ).delete()
 
         return Response({
             "message": "Swap approved successfully.",
             "requires_admin_approval": False
         })
-
-class ShiftSwapRejectView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, swap_id):
-        try:
-            swap = ShiftSwapRequest.objects.select_related("target_shift__schedule__calendar").get(id=swap_id)
-        except ShiftSwapRequest.DoesNotExist:
-            return Response({"error": "Swap request not found."}, status=404)
-
-        calendar = swap.target_shift.schedule.calendar
-
-        is_target = swap.target_shift.employee == request.user
-        is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
-        self.calendar = calendar
-        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
-
-        if not (is_target or is_admin or has_perm):
-            return Response({"error": "You do not have permission to reject this swap."}, status=403)
-
-        InboxNotification.objects.create(
-            user=swap.requested_by,
-            notification_type='SWAP_REQUEST',
-            message=f"Your swap request for {format_shift_time(swap.requesting_shift)} was rejected.",
-            related_object_id=swap.requesting_shift.id,
-            calendar=calendar
-        )
-
-        swap.delete()
-        return Response({"message": "Swap request rejected."})
 
 
 class ShiftTakeRequestView(APIView):
@@ -1775,3 +1707,68 @@ class ScheduleRemindUnconfirmedView(APIView):
         InboxNotification.objects.bulk_create(notifications)
 
         return Response({'status': 'reminders sent'})
+
+class CalendarHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, calendar_id):
+        user = request.user
+        calendar = get_object_or_404(Calendar, id=calendar_id)
+
+        # Parse query params
+        event_type = request.query_params.get('type', None)
+        raw_start = request.query_params.get('start_date')
+        raw_end = request.query_params.get('end_date')
+
+        start_date = parse_date(raw_start) if raw_start else None
+        end_date = parse_date(raw_end) if raw_end else None
+
+        def within_date_range(obj):
+            created = getattr(obj, 'created_at', None)
+            if not created:
+                return False
+            if start_date and created.date() < start_date:
+                return False
+            if end_date and created.date() > end_date:
+                return False
+            return True
+
+        all_events = []
+
+        if event_type in [None, '', 'all', 'swap_request']:
+            swap_qs = ShiftSwapRequest.objects.filter(
+                requesting_shift__schedule__calendar=calendar,
+                is_active=False  # ✅ Show only completed
+            ).select_related('requesting_shift', 'target_shift', 'requested_by')
+
+            all_events.extend(swap_qs)
+
+        if event_type in [None, '', 'all', 'take_request']:
+            takes = ShiftTakeRequest.objects.filter(
+                shift__schedule__calendar=calendar
+            ).select_related('shift', 'requested_by', 'requested_to')
+            all_events.extend(takes)
+
+        if event_type in [None, '', 'all', 'time_off']:
+            time_offs = TimeOffRequest.objects.filter(
+                calendar=calendar,
+                status='approved'
+            ).select_related('employee')
+            all_events.extend(time_offs)
+
+        if event_type in [None, '', 'all', 'schedule_release']:
+            releases = InboxNotification.objects.filter(
+                calendar=calendar,
+                notification_type='SCHEDULE_RELEASE'
+            ).select_related('sender', 'user')
+            all_events.extend(releases)
+
+        # Filter by date range
+        filtered_events = [obj for obj in all_events if within_date_range(obj)]
+
+        # Sort descending by created_at
+        sorted_events = sorted(filtered_events, key=attrgetter('created_at'), reverse=True)
+
+        # Serialize and return
+        serializer = UnifiedHistorySerializer(sorted_events, many=True, context={'request': request})
+        return Response(serializer.data)

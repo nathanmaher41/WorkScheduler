@@ -167,6 +167,7 @@ class ShiftTakeRequest(models.Model):
     approved_by_target = models.BooleanField(default=False)
     approved_by_admin = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.requested_by.username} → take {self.shift} from {self.requested_to.username}"

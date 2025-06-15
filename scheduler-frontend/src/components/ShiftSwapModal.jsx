@@ -16,14 +16,18 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
-    console.log("ShiftSwapModal isAdmin:", isAdmin);
-    setIsOwnShift(shift?.employee === currentUserId);
+    if (shift && currentUserId !== undefined) {
+      setIsOwnShift(Number(shift.employee) === Number(currentUserId));
+    }
   }, [shift, currentUserId]);
 
   const fetchPendingSwaps = async () => {
     try {
       const res = await axios.get('/api/shifts/swap/requests/');
-      setPendingSwaps(res.data);
+      console.log("🔁 Swap Requests:", res.data);
+      console.log("🔍 Shift ID:", shift.id);
+      const activeOnly = res.data.filter(s => s.is_active); // 💥 NEW LINE
+      setPendingSwaps(activeOnly);
     } catch (err) {
       console.error('Error fetching pending swaps:', err);
     }
@@ -32,7 +36,8 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
   const fetchPendingTakes = async () => {
       try {
         const res = await axios.get('/api/shifts/take/requests/');
-        setPendingTakes(res.data);
+        const activeOnly = res.data.filter(t => t.is_active); // 💥 NEW LINE
+        setPendingTakes(activeOnly);
         console.log('All pending take requests:', res.data);
         console.log(res.data)
       } catch (err) {
@@ -44,14 +49,12 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     const fetchFutureShifts = async () => {
       if (!shift || !isOpen) return;
       try {
-        const res = await axios.get(`/api/schedules/${shift.schedule}/shifts/`);
+        const res = await axios.get(`/api/calendars/${calendarId}/shifts/`);
         const futureShifts = res.data.filter(s => new Date(s.start_time) > new Date());
         setAllFutureShifts(futureShifts);
 
-        if (!isOwnShift) {
-          const userShifts = futureShifts.filter(s => s.employee === currentUserId);
-          setYourShifts(userShifts);
-        }
+        const userShifts = futureShifts.filter(s => s.employee === currentUserId);
+        setYourShifts(userShifts);
       } catch (err) {
         console.error('Error fetching future shifts:', err);
       }
@@ -104,7 +107,13 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
   const handleApprove = async (swapId) => {
     try {
       const res = await axios.post(`/api/shifts/swap/${swapId}/accept/`);
-      const { requires_admin_approval, approved_by_target, approved_by_admin } = res.data;
+      const { requires_admin_approval, approved_by_target, approved_by_admin, message } = res.data;
+
+      if (message?.includes("already been finalized")) {
+        setSuccessMessage("This swap was already finalized.");
+        await fetchPendingSwaps();
+        return;
+      }
 
       if (approved_by_target && requires_admin_approval && !approved_by_admin) {
         setSuccessMessage('✅ Accepted — pending admin approval.');
@@ -112,8 +121,10 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
         setSuccessMessage('Swap approved and shift transferred.');
         if (onSwapComplete) onSwapComplete();
       }
+
       await fetchPendingSwaps();
       if (onSwapComplete) onSwapComplete();
+
     } catch (err) {
       console.error('Error approving swap:', err);
     }
@@ -194,13 +205,21 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     );
 
     
-
-
+console.log("🔍 yourShifts:", yourShifts);
+     console.log("👤 isOwnShift:", isOwnShift, "| shift.employee =", shift?.employee, "| currentUserId =", currentUserId);
   const formatDate = (datetimeStr) => new Date(datetimeStr).toLocaleDateString();
   const formatTime = (datetimeStr) => new Date(datetimeStr).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+  console.log("🧪 Matching shift.id:", shift.id);
+  console.log("🧪 Raw pendingSwaps:", pendingSwaps.map(p => ({
+    req_id: p.id,
+    target: p.target_shift_id,
+    requesting: p.requesting_shift_id,
+    is_active: p.is_active
+  })));
   const allRelevantRequests = pendingSwaps.filter(req =>
-    req.target_shift_id === shift.id || req.requesting_shift_id === shift.id
+    (Number(req.target_shift_id) === Number(shift.id) || Number(req.requesting_shift_id) === Number(shift.id)) &&
+    req.is_active
   );
 
   pendingTakes.forEach(req => {

@@ -314,7 +314,7 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
     approved_by_target = serializers.BooleanField(read_only=True)
     approved_by_admin = serializers.BooleanField(read_only=True)
     requires_admin_approval = serializers.SerializerMethodField()
-
+    is_active = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ShiftSwapRequest
@@ -332,6 +332,7 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
             'approved_by_target',
             'approved_by_admin',
             'requires_admin_approval',
+            'is_active'
         ]
 
     def get_requesting_shift_time(self, obj):
@@ -372,7 +373,7 @@ class ShiftTakeRequestSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'shift', 'shift_time', 'shift_owner', 'requester', 'direction',
             'requested_by_id', 'requested_to_id', 'requires_admin_approval',
-            'approved_by_target'
+            'approved_by_target', 'is_active'
         ]
 
     def get_shift_time(self, obj):

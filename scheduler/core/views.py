@@ -77,6 +77,7 @@ from itertools import chain
 from operator import attrgetter
 from django.utils.dateparse import parse_date
 from django.utils.timezone import now
+import logging
 
 User = get_user_model()
 
@@ -688,35 +689,52 @@ class ShiftSwapRequestListView(APIView):
     def get(self, request):
         sent_requests = ShiftSwapRequest.objects.filter(requested_by=request.user)
         received_requests = ShiftSwapRequest.objects.filter(target_shift__employee=request.user)
-        combined = sent_requests.union(received_requests)
+        combined = (sent_requests | received_requests).distinct()
+        #combined = sent_requests.union(received_requests)
         serializer = ShiftSwapRequestSerializer(combined, many=True)
         return Response(serializer.data)
 
+logger = logging.getLogger(__name__)
 
 class ShiftSwapAcceptView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, swap_id):
+        logger.debug(f"🔄 ShiftSwapAcceptView triggered by user={request.user.id} for swap_id={swap_id}")
+
         try:
             swap = ShiftSwapRequest.objects.select_related(
                 'requesting_shift__schedule__calendar',
                 'target_shift__schedule__calendar'
             ).get(id=swap_id)
         except ShiftSwapRequest.DoesNotExist:
+            logger.warning(f"❌ Swap request {swap_id} not found.")
             return Response({"error": "Swap request not found."}, status=404)
+
+        if not swap.is_active:
+            logger.info(f"⏹️ Swap request {swap_id} already finalized. Skipping.")
+            return Response({
+                "message": "Swap request is no longer active.",
+                "requires_admin_approval": not swap.approved_by_admin
+            })
 
         calendar = swap.target_shift.schedule.calendar
         is_target = swap.target_shift.employee == request.user
         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
-        self.calendar = calendar
+        self.calendar = calendar  # for permission class
         has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
 
+        logger.debug(f"Calendar={calendar.name} | is_target={is_target} | is_admin={is_admin} | has_perm={has_perm}")
+
         if not (is_target or is_admin or has_perm):
+            logger.warning("⚠️ User lacks permission to approve this swap.")
             return Response({"error": "You do not have permission to approve this swap."}, status=403)
 
         requires_admin_approval = not calendar.allow_swap_without_approval
+        logger.debug(f"requires_admin_approval={requires_admin_approval}")
 
         if requires_admin_approval and is_target and not (is_admin or has_perm):
+            logger.info("🔒 Target approved but waiting for admin approval.")
             swap.approved_by_target = True
             swap.save()
             return Response({
@@ -727,22 +745,39 @@ class ShiftSwapAcceptView(APIView):
         with transaction.atomic():
             a = swap.requesting_shift
             b = swap.target_shift
-            a_employee = a.employee
 
-            # Perform the employee swap
+            logger.debug(f"Before swap: a.id={a.id} owner={a.employee_id} | b.id={b.id} owner={b.employee_id}")
+
+            # 🔥 Delete swaps involving either shift (before swap)
+            deleted_before = ShiftSwapRequest.objects.filter(
+                Q(requesting_shift=a) | Q(target_shift=a) |
+                Q(requesting_shift=b) | Q(target_shift=b)
+            ).exclude(id=swap.id).delete()[0]
+            logger.debug(f"🗑️ Deleted {deleted_before} related swap requests BEFORE swap.")
+
+            # ✅ Perform swap
+            a_employee = a.employee
             a.employee = b.employee
             b.employee = a_employee
             a.save()
             b.save()
 
-            # Log approval (won’t survive deletion below)
+            logger.debug(f"After swap: a.id={a.id} new_owner={a.employee_id} | b.id={b.id} new_owner={b.employee_id}")
+
+            # 🧼 Delete again after swap in case any new (reverse) pairings now match
+            deleted_after = ShiftSwapRequest.objects.filter(
+                Q(requesting_shift=a) | Q(target_shift=a) |
+                Q(requesting_shift=b) | Q(target_shift=b)
+            ).exclude(id=swap.id).delete()[0]
+            logger.debug(f"🗑️ Deleted {deleted_after} related swap requests AFTER swap.")
+
             swap.approved_by_target = True
             swap.approved_by_admin = True
             swap.is_active = False
             swap.accepted_at = now()
             swap.save()
+            logger.info(f"✅ Swap {swap.id} fully approved and finalized.")
 
-            # Notify requester before deletion
             InboxNotification.objects.create(
                 user=swap.requested_by,
                 notification_type='SWAP_REQUEST',
@@ -750,18 +785,12 @@ class ShiftSwapAcceptView(APIView):
                 related_object_id=a.id,
                 calendar=calendar
             )
-
-            # ❗ Delete ALL swaps involving either shift, INCLUDING this one
-            ShiftSwapRequest.objects.filter(
-                models.Q(requesting_shift=a) | models.Q(target_shift=a) |
-                models.Q(requesting_shift=b) | models.Q(target_shift=b)
-            ).delete()
+            logger.debug("📬 Inbox notification created.")
 
         return Response({
             "message": "Swap approved successfully.",
             "requires_admin_approval": False
         })
-
 
 class ShiftTakeRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -838,7 +867,7 @@ class ShiftTakeAcceptView(APIView):
 
         requires_admin = calendar.require_take_approval
 
-        # If admin approval is required and current user is the recipient
+        # ✋ If admin approval is still needed, only mark as accepted by target
         if requires_admin and is_target and not (is_admin or has_perm):
             take.approved_by_target = True
             take.save()
@@ -847,10 +876,11 @@ class ShiftTakeAcceptView(APIView):
                 "requires_admin_approval": True
             })
 
-        # Determine direction of shift transfer
+        # ✅ Admin or full approval path
         direction = "give" if take.requested_by == take.shift.employee else "take"
 
         with transaction.atomic():
+            # 🔁 Transfer ownership
             if direction == "take":
                 take.shift.employee = take.requested_by
             else:
@@ -866,13 +896,16 @@ class ShiftTakeAcceptView(APIView):
                 calendar=calendar
             )
 
-            take.delete()
+            # ✅ Mark request resolved
+            take.approved_by_target = True
+            take.approved_by_admin = True
+            take.is_active = False
+            take.save()
 
         return Response({
             "success": True,
             "requires_admin_approval": False
         })
-
 
 class ShiftTakeRejectView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1737,8 +1770,9 @@ class CalendarHistoryView(APIView):
 
         if event_type in [None, '', 'all', 'swap_request']:
             swap_qs = ShiftSwapRequest.objects.filter(
-                requesting_shift__schedule__calendar=calendar,
-                is_active=False  # ✅ Show only completed
+                models.Q(requesting_shift__schedule__calendar=calendar) |
+                models.Q(target_shift__schedule__calendar=calendar),
+                is_active=False
             ).select_related('requesting_shift', 'target_shift', 'requested_by')
 
             all_events.extend(swap_qs)

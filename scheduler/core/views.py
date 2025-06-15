@@ -14,6 +14,7 @@ from django.utils.timezone import localtime
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from .models import (
     Schedule, 
     ScheduleMembership, 
@@ -1741,6 +1742,10 @@ class ScheduleRemindUnconfirmedView(APIView):
 
         return Response({'status': 'reminders sent'})
 
+class CustomPageNumberPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'  # Allows frontend to pass ?page_size=50
+
 class CalendarHistoryView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1774,7 +1779,6 @@ class CalendarHistoryView(APIView):
                 models.Q(target_shift__schedule__calendar=calendar),
                 is_active=False
             ).select_related('requesting_shift', 'target_shift', 'requested_by')
-
             all_events.extend(swap_qs)
 
         if event_type in [None, '', 'all', 'take_request']:
@@ -1797,12 +1801,10 @@ class CalendarHistoryView(APIView):
             ).select_related('sender', 'user')
             all_events.extend(releases)
 
-        # Filter by date range
         filtered_events = [obj for obj in all_events if within_date_range(obj)]
-
-        # Sort descending by created_at
         sorted_events = sorted(filtered_events, key=attrgetter('created_at'), reverse=True)
 
-        # Serialize and return
-        serializer = UnifiedHistorySerializer(sorted_events, many=True, context={'request': request})
-        return Response(serializer.data)
+        paginator = CustomPageNumberPagination()
+        page = paginator.paginate_queryset(sorted_events, request)
+        serializer = UnifiedHistorySerializer(page, many=True, context={'request': request})
+        return paginator.get_paginated_response(serializer.data)

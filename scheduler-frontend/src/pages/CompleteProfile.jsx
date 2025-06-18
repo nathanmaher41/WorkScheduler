@@ -7,8 +7,7 @@ export default function CompleteProfile() {
   const [form, setForm] = useState({
     first_name: '',
     middle_name: '',
-    last_name: '',
-    phone_number: ''
+    last_name: ''
   });
   const [errors, setErrors] = useState({});
   const navigate = useNavigate();
@@ -57,20 +56,6 @@ export default function CompleteProfile() {
             onChange={handleChange}
             className="w-full p-2 border rounded bg-white text-black placeholder-gray-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 border-gray-300 dark:border-gray-600 focus:outline-blue-500"
         />
-
-        <div>
-            <input
-            name="phone_number"
-            placeholder="Phone Number (Optional)"
-            value={form.phone_number}
-            onChange={handleChange}
-            className="w-full p-2 border rounded bg-white text-black placeholder-gray-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 border-gray-300 dark:border-gray-600 focus:outline-blue-500"
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Optional — provide this if you want to receive SMS updates later.
-            </p>
-        </div>
-
         {errors.first_name && <p className="text-red-500 text-sm">{errors.first_name[0]}</p>}
         {errors.last_name && <p className="text-red-500 text-sm">{errors.last_name[0]}</p>}
         {errors.general && <p className="text-red-500 text-sm">{errors.general}</p>}

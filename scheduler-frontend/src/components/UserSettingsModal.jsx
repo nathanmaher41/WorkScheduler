@@ -8,12 +8,10 @@ export default function UserSettingsModal({ onClose }) {
         first_name: '',
         middle_name: '',
         last_name: '',
-        phone_number: '',
         pronouns: '',
         show_pronouns: true,
         show_middle_name: true,
         notify_email: true,
-        notify_sms: false
     });
     const [message, setMessage] = useState('');
     const [applied, setApplied] = useState(false);
@@ -32,12 +30,10 @@ export default function UserSettingsModal({ onClose }) {
                     first_name: res.data.first_name || '',
                     middle_name: res.data.middle_name || '',
                     last_name: res.data.last_name || '',
-                    phone_number: res.data.phone_number || '',
                     pronouns: res.data.pronouns || '',
                     show_pronouns: res.data.show_pronouns ?? true,
                     show_middle_name: res.data.show_middle_name ?? true,
                     notify_email: res.data.notify_email ?? true,
-                    notify_sms: res.data.notify_sms ?? false
                 });
                 setUserInfo({
                     username: res.data.username || '',
@@ -128,16 +124,6 @@ export default function UserSettingsModal({ onClose }) {
                                             className="w-full p-2 border rounded bg-white dark:bg-gray-800 text-black dark:text-white"
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1">Phone Number</label>
-                                        <input
-                                            type="text"
-                                            value={form.phone_number || ''}
-                                            onChange={e => handleChange('phone_number', e.target.value)}
-                                            className="w-full p-2 border rounded bg-white dark:bg-gray-800 text-black dark:text-white"
-                                            placeholder="e.g. +1234567890"
-                                        />
-                                    </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -205,15 +191,6 @@ export default function UserSettingsModal({ onClose }) {
                                                 className="mr-2"
                                             />
                                             Email Notifications
-                                        </label>
-                                        <label className="block">
-                                            <input
-                                                type="checkbox"
-                                                checked={form.notify_sms}
-                                                onChange={e => handleChange('notify_sms', e.target.checked)}
-                                                className="mr-2"
-                                            />
-                                            SMS Notifications
                                         </label>
                                     </div>
                                     <div>

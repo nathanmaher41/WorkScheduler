@@ -5,6 +5,8 @@ export default function SwapsAndTakesPanel({ calendarId }) {
   const [swaps, setSwaps] = useState([]);
   const [takes, setTakes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [processingRequest, setProcessingRequest] = useState({ type: null, id: null, action: null });
+
 
   const fetchData = async () => {
     try {
@@ -29,6 +31,7 @@ export default function SwapsAndTakesPanel({ calendarId }) {
     const handleRejectSwap = (id) => handleAction('swap', id, 'reject');
 
   const handleAction = async (type, id, action) => {
+    setProcessingRequest({ type, id, action });
     const endpoint = type === 'swap'
         ? `/api/shifts/swap/${id}/${action}/`
         : `/api/shifts/take/${id}/${action}/`
@@ -38,6 +41,9 @@ export default function SwapsAndTakesPanel({ calendarId }) {
       fetchData(); // Refresh list after action
     } catch (err) {
       console.error(`Failed to ${action} ${type} request:`, err);
+    }
+    finally {
+        setProcessingRequest({ type: null, id: null, action: null });
     }
   };
 
@@ -59,14 +65,19 @@ export default function SwapsAndTakesPanel({ calendarId }) {
               <button
                 onClick={() => handleApproveSwap(s.id)}
                 className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                disabled={processingRequest.type === 'swap' && processingRequest.id === s.id && processingRequest.action === 'accept'}
                 >
-                Approve
+                {processingRequest.type === 'swap' && processingRequest.id === s.id && processingRequest.action === 'accept'
+                    ? 'Accepting...'
+                    : 'Approve'}
                 </button>
                 <button
                 onClick={() => handleRejectSwap(s.id)}
                 className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded ml-2"
                 >
-                Reject
+                {processingRequest.type === 'swap' && processingRequest.id === s.id && processingRequest.action === 'reject'
+                    ? ''
+                    : 'Reject'}
                 </button>
 
             </div>
@@ -81,18 +92,24 @@ export default function SwapsAndTakesPanel({ calendarId }) {
             <p><strong>{t.requester}</strong> wants to {t.direction === 'take' ? 'take' : 'give'} a shift owned by <strong>{t.shift_owner}</strong></p>
             <p>{new Date(t.shift_time.start).toLocaleString()}</p>
             <div className="mt-2 flex gap-2">
-              <button
+            <button
                 onClick={() => handleApproveTake(t.id)}
-                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
-                >
-                Approve
-                </button>
-                <button
+                disabled={processingRequest.type === 'take' && processingRequest.id === t.id && processingRequest.action === 'accept'}
+                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
+            >
+                {processingRequest.type === 'take' && processingRequest.id === t.id && processingRequest.action === 'accept'
+                ? 'Accepting...'
+                : 'Approve'}
+            </button>
+            <button
                 onClick={() => handleRejectTake(t.id)}
-                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded ml-2"
-                >
-                Reject
-                </button>
+                disabled={processingRequest.type === 'take' && processingRequest.id === t.id && processingRequest.action === 'reject'}
+                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded ml-2 disabled:opacity-50"
+            >
+                {processingRequest.type === 'take' && processingRequest.id === t.id && processingRequest.action === 'reject'
+                ? 'Rejecting...'
+                : 'Reject'}
+            </button>
             </div>
           </div>
         ))}

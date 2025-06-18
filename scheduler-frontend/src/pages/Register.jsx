@@ -36,7 +36,7 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white text-black dark:bg-gray-900 dark:text-white transition-colors duration-300">
       <div className="bg-gray-100 dark:bg-gray-800 p-8 rounded-xl shadow-md w-full max-w-md transition-colors duration-300">
-        <h1 className="text-3xl font-extrabold text-center mb-2 text-purple-600">ScheduaLounge</h1>
+        <h1 className="text-3xl font-extrabold text-center mb-2 text-purple-600">ScheduLounge</h1>
         <h1 className="text-2xl font-bold mb-1">Register</h1>
         <p className="text-gray-500 mb-6">Create your account below.</p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

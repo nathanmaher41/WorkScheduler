@@ -17,6 +17,8 @@ export default function ScheduleManagementPanel({ calendarId }) {
   const [confirmationData, setConfirmationData] = useState({ confirmed_members: [], unconfirmed_members: [] });
   const [statusMessage, setStatusMessage] = useState(null);
   const [statusVisible, setStatusVisible] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendingUnconfirmed, setSendingUnconfirmed] = useState(false);
 
 
   useEffect(() => {
@@ -81,6 +83,7 @@ export default function ScheduleManagementPanel({ calendarId }) {
   };
 
   const handlePushRelease = async () => {
+    setSending(true);
     try {
       await axios.post(`/api/calendars/${calendarId}/schedules/${activeSchedule.id}/notify/`, { notes: releaseNotes });
       setReleaseNotes('');
@@ -88,6 +91,9 @@ export default function ScheduleManagementPanel({ calendarId }) {
     } catch (err) {
       console.error('Error pushing release:', err);
       showStatusMessage("❌ An error occurred while sending the schedule.", "error");
+    }
+    finally {
+        setSending(false);
     }
   };
 
@@ -103,12 +109,16 @@ export default function ScheduleManagementPanel({ calendarId }) {
   };
 
   const handleResendReminder = async () => {
+    setSendingUnconfirmed(true)
     try {
       await axios.post(`/api/schedules/${activeSchedule.id}/remind-unconfirmed/`);
       showStatusMessage("🔔 Calendar members who haven't confirmed have been reminded again.", "success");
     } catch (err) {
       console.error('Error resending reminders:', err);
       showStatusMessage("❌ An error occurred while sending reminders.", "error");
+    } 
+    finally{
+        setSendingUnconfirmed(false)
     }
   };
 
@@ -203,9 +213,9 @@ export default function ScheduleManagementPanel({ calendarId }) {
         {activeSchedule && (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={handlePushRelease} className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">Send Schedule</button>
+              <button onClick={handlePushRelease} className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"  disabled={sending}>{sending ? 'Sending...' : 'Send Schedule'}</button>
               <button onClick={handleForceReset} className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">Reset Confirmations</button>
-              <button onClick={handleResendReminder} className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">Remind Unconfirmed</button>
+              <button onClick={handleResendReminder} className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700" disabled={sendingUnconfirmed}>{sendingUnconfirmed ? 'Reminding...' : 'Remind Unconfirmed'}</button>
             </div>
             {statusMessage && (
                 <div

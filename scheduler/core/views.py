@@ -79,7 +79,11 @@ from operator import attrgetter
 from django.utils.dateparse import parse_date
 from django.utils.timezone import now
 import logging
-
+from django.conf import settings 
+from django.core.mail import EmailMultiAlternatives
+import os
+from notifications.email_utils import send_notification_email
+import textwrap
 User = get_user_model()
 
 
@@ -91,6 +95,50 @@ def format_shift_time(shift):
     time_range = f"{start.strftime('%-I:%M %p')}–{end.strftime('%-I:%M %p')}"  # e.g. "2:00 PM–6:00 PM"
     return f"{date} from {time_range}"
 
+def send_notification_email(subject, message, recipient_email):
+    if not recipient_email:
+        return
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[recipient_email],
+        fail_silently=True,
+    )
+
+def send_bulk_notification_email(subject, message, user_queryset):
+    for user in user_queryset:
+        if user.notify_email and user.email:
+            send_notification_email(subject, message, user.email)
+
+def notify_shift_take_request_approved(take):
+    requester = take.requested_by
+    receiver = take.requested_to
+    direction = "give" if take.requested_by == take.shift.employee else "take"
+
+    if requester.notify_email and requester.email:
+        shift_dt = localtime(take.shift.start_time).strftime("%A, %B %d at %I:%M %p")
+
+        if direction == "take":
+            subject = "Your Take Shift Request Was Approved"
+            message = (
+                f"Hi {requester.first_name},\n\n"
+                f"Your request to take a shift from {receiver.first_name} {receiver.last_name} "
+                f"has been approved. You are now scheduled to work on **{shift_dt}**.\n\n"
+                f"Thanks for using ScheduLounge!"
+            )
+        else:
+            subject = "Your Shift Give Request Was Approved"
+            message = (
+                f"Hi {requester.first_name},\n\n"
+                f"{receiver.first_name} {receiver.last_name} has accepted your request to take your shift "
+                f"on **{shift_dt}**. You are no longer scheduled for this shift.\n\n"
+                f"Thanks for using ScheduLounge!"
+            )
+
+        send_notification_email(subject, message, requester.email)
+
+
 #views functions
 
 class RegisterView(generics.CreateAPIView):
@@ -100,19 +148,33 @@ class RegisterView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save(is_active=False)
-        print("Sending email to:", user.email)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         activation_link = self.request.build_absolute_uri(
             reverse('activate-user', kwargs={'uidb64': uid, 'token': token})
         )
-        send_mail(
-            subject='Activate Your Account',
-            message=f'Click to activate: {activation_link}',
-            from_email='no-reply@example.com',
-            recipient_list=[user.email],
-            fail_silently=False,
+
+        subject = 'Activate Your ScheduLounge Account'
+        text_content = f'Hi {user.username},\n\nThanks for registering! Please click the link below to activate your account:\n\n{activation_link}\n\nIf you did not sign up, you can ignore this email.'
+        html_content = f'''
+        <p>Hi <strong>{user.username}</strong>,</p>
+        <p>Thanks for registering for <strong>ScheduLounge</strong>!</p>
+        <p>Click the button below to activate your account:</p>
+        <p><a href="{activation_link}" style="background-color:#6b46c1;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Activate Account</a></p>
+        <p>If the button doesn't work, you can also use this link:</p>
+        <p><a href="{activation_link}">{activation_link}</a></p>
+        <br/>
+        <p>– The ScheduLounge Team</p>
+        '''
+
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_content,
+            from_email=os.getenv("EMAIL_HOST_USER"),
+            to=[user.email],
         )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
 
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -345,24 +407,94 @@ class IncomingSwapRequestsView(APIView):
 
         return Response(data)
 
+# class ShiftSwapRejectView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def post(self, request, swap_id):
+#         try:
+#             target_shift = Shift.objects.select_related('schedule__calendar').get(id=swap_id, employee=request.user)
+#         except Shift.DoesNotExist:
+#             return Response({"error": "Shift not found or not yours."}, status=404)
+
+#         initiator_shift = Shift.objects.select_related('employee').filter(swap_with=target_shift, is_swap_pending=True).first()
+#         if not initiator_shift:
+#             return Response({"error": "No pending swap found for this shift."}, status=404)
+
+#         # Capture before clearing
+#         calendar = target_shift.schedule.calendar
+#         initiator = initiator_shift.employee
+#         recipient = request.user
+#         shift_time = f"{target_shift.start_time.strftime('%m/%d %I:%M %p')} – {target_shift.end_time.strftime('%I:%M %p')}"
+
+#         # Clear the request
+#         initiator_shift.is_swap_pending = False
+#         initiator_shift.swap_requested_by = None
+#         initiator_shift.swap_with = None
+#         initiator_shift.save()
+
+#         # ✅ Send email to initiator
+#         if initiator.email:
+#             subject = f"Shift Swap Request Rejected"
+#             body = textwrap.dedent(f"""\
+#                 Hi {initiator.first_name or initiator.username},
+
+#                 Your shift swap request with {recipient.first_name or recipient.username} on calendar "{calendar.name}" was rejected.
+
+#                 Target shift: {shift_time}
+
+#                 You can open the app to try requesting another swap or manage your shifts.
+
+#             """)
+#             send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [initiator.email], fail_silently=True)
+
+#         return Response({"message": "Swap request rejected."})
+
 class ShiftSwapRejectView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, swap_id):
         try:
-            target_shift = Shift.objects.get(id=swap_id, employee=request.user)
-        except Shift.DoesNotExist:
-            return Response({"error": "Shift not found or not yours."}, status=404)
+            swap = ShiftSwapRequest.objects.select_related(
+                'target_shift__employee',
+                'target_shift__schedule__calendar',
+                'requesting_shift__employee'
+            ).get(id=swap_id, is_active=True)
+        except ShiftSwapRequest.DoesNotExist:
+            return Response({"error": "Swap request not found."}, status=404)
 
-        initiator_shift = Shift.objects.filter(swap_with=target_shift, is_swap_pending=True).first()
-        if not initiator_shift:
-            return Response({"error": "No pending swap found for this shift."}, status=404)
+        if swap.target_shift.employee != request.user:
+            return Response({"error": "You are not authorized to reject this swap."}, status=403)
 
-        # Clear the request
-        initiator_shift.is_swap_pending = False
-        initiator_shift.swap_requested_by = None
-        initiator_shift.swap_with = None
-        initiator_shift.save()
+        swap.is_active = False
+        swap.save()
+
+        requester = swap.requesting_shift.employee
+        recipient = request.user
+        calendar = swap.target_shift.schedule.calendar
+        shift_time = f"{swap.target_shift.start_time.strftime('%m/%d %I:%M %p')} – {swap.target_shift.end_time.strftime('%I:%M %p')}"
+
+        # ✅ Inbox notification
+        InboxNotification.objects.create(
+            user=requester,
+            notification_type='SWAP_REQUEST',
+            message=f"Your shift swap request for {shift_time} was rejected.",
+            related_object_id=swap.requesting_shift.id,
+            calendar=calendar
+        )
+
+        # ✅ Email notification (optional)
+        if requester.email:
+            subject = "Shift Swap Request Rejected"
+            body = textwrap.dedent(f"""\
+                Hi {requester.first_name or requester.username},
+
+                Your shift swap request with {recipient.first_name or recipient.username} on calendar "{calendar.name}" was rejected.
+
+                Target shift: {shift_time}
+
+                You can open the app to try requesting another swap or manage your shifts.
+            """)
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [requester.email], fail_silently=True)
 
         return Response({"message": "Swap request rejected."})
 
@@ -697,6 +829,102 @@ class ShiftSwapRequestListView(APIView):
 
 logger = logging.getLogger(__name__)
 
+# class ShiftSwapAcceptView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request, swap_id):
+#         logger.debug(f"🔄 ShiftSwapAcceptView triggered by user={request.user.id} for swap_id={swap_id}")
+
+#         try:
+#             swap = ShiftSwapRequest.objects.select_related(
+#                 'requesting_shift__schedule__calendar',
+#                 'target_shift__schedule__calendar'
+#             ).get(id=swap_id)
+#         except ShiftSwapRequest.DoesNotExist:
+#             logger.warning(f"❌ Swap request {swap_id} not found.")
+#             return Response({"error": "Swap request not found."}, status=404)
+
+#         if not swap.is_active:
+#             logger.info(f"⏹️ Swap request {swap_id} already finalized. Skipping.")
+#             return Response({
+#                 "message": "Swap request is no longer active.",
+#                 "requires_admin_approval": not swap.approved_by_admin
+#             })
+
+#         calendar = swap.target_shift.schedule.calendar
+#         is_target = swap.target_shift.employee == request.user
+#         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+#         self.calendar = calendar  # for permission class
+#         has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
+
+#         logger.debug(f"Calendar={calendar.name} | is_target={is_target} | is_admin={is_admin} | has_perm={has_perm}")
+
+#         if not (is_target or is_admin or has_perm):
+#             logger.warning("⚠️ User lacks permission to approve this swap.")
+#             return Response({"error": "You do not have permission to approve this swap."}, status=403)
+
+#         requires_admin_approval = not calendar.allow_swap_without_approval
+#         logger.debug(f"requires_admin_approval={requires_admin_approval}")
+
+#         if requires_admin_approval and is_target and not (is_admin or has_perm):
+#             logger.info("🔒 Target approved but waiting for admin approval.")
+#             swap.approved_by_target = True
+#             swap.save()
+#             return Response({
+#                 "message": "Swap accepted by target. Pending admin approval.",
+#                 "requires_admin_approval": True
+#             })
+
+#         with transaction.atomic():
+#             a = swap.requesting_shift
+#             b = swap.target_shift
+
+#             logger.debug(f"Before swap: a.id={a.id} owner={a.employee_id} | b.id={b.id} owner={b.employee_id}")
+
+#             # 🔥 Delete swaps involving either shift (before swap)
+#             deleted_before = ShiftSwapRequest.objects.filter(
+#                 Q(requesting_shift=a) | Q(target_shift=a) |
+#                 Q(requesting_shift=b) | Q(target_shift=b)
+#             ).exclude(id=swap.id).delete()[0]
+#             logger.debug(f"🗑️ Deleted {deleted_before} related swap requests BEFORE swap.")
+
+#             # ✅ Perform swap
+#             a_employee = a.employee
+#             a.employee = b.employee
+#             b.employee = a_employee
+#             a.save()
+#             b.save()
+
+#             logger.debug(f"After swap: a.id={a.id} new_owner={a.employee_id} | b.id={b.id} new_owner={b.employee_id}")
+
+#             # 🧼 Delete again after swap in case any new (reverse) pairings now match
+#             deleted_after = ShiftSwapRequest.objects.filter(
+#                 Q(requesting_shift=a) | Q(target_shift=a) |
+#                 Q(requesting_shift=b) | Q(target_shift=b)
+#             ).exclude(id=swap.id).delete()[0]
+#             logger.debug(f"🗑️ Deleted {deleted_after} related swap requests AFTER swap.")
+
+#             swap.approved_by_target = True
+#             swap.approved_by_admin = True
+#             swap.is_active = False
+#             swap.accepted_at = now()
+#             swap.save()
+#             logger.info(f"✅ Swap {swap.id} fully approved and finalized.")
+
+#             InboxNotification.objects.create(
+#                 user=swap.requested_by,
+#                 notification_type='SWAP_REQUEST',
+#                 message=f"Your swap request for {format_shift_time(a)} was approved.",
+#                 related_object_id=a.id,
+#                 calendar=calendar
+#             )
+#             logger.debug("📬 Inbox notification created.")
+
+#         return Response({
+#             "message": "Swap approved successfully.",
+#             "requires_admin_approval": False
+#         })
+
 class ShiftSwapAcceptView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -706,7 +934,10 @@ class ShiftSwapAcceptView(APIView):
         try:
             swap = ShiftSwapRequest.objects.select_related(
                 'requesting_shift__schedule__calendar',
-                'target_shift__schedule__calendar'
+                'target_shift__schedule__calendar',
+                'requesting_shift__employee',
+                'target_shift__employee',
+                'requested_by'
             ).get(id=swap_id)
         except ShiftSwapRequest.DoesNotExist:
             logger.warning(f"❌ Swap request {swap_id} not found.")
@@ -750,13 +981,13 @@ class ShiftSwapAcceptView(APIView):
             logger.debug(f"Before swap: a.id={a.id} owner={a.employee_id} | b.id={b.id} owner={b.employee_id}")
 
             # 🔥 Delete swaps involving either shift (before swap)
-            deleted_before = ShiftSwapRequest.objects.filter(
+            ShiftSwapRequest.objects.filter(
                 Q(requesting_shift=a) | Q(target_shift=a) |
                 Q(requesting_shift=b) | Q(target_shift=b)
-            ).exclude(id=swap.id).delete()[0]
-            logger.debug(f"🗑️ Deleted {deleted_before} related swap requests BEFORE swap.")
+            ).exclude(id=swap.id).delete()
 
             # ✅ Perform swap
+            receiver = b.employee
             a_employee = a.employee
             a.employee = b.employee
             b.employee = a_employee
@@ -765,12 +996,11 @@ class ShiftSwapAcceptView(APIView):
 
             logger.debug(f"After swap: a.id={a.id} new_owner={a.employee_id} | b.id={b.id} new_owner={b.employee_id}")
 
-            # 🧼 Delete again after swap in case any new (reverse) pairings now match
-            deleted_after = ShiftSwapRequest.objects.filter(
+            # 🧼 Clean up reverse pairings
+            ShiftSwapRequest.objects.filter(
                 Q(requesting_shift=a) | Q(target_shift=a) |
                 Q(requesting_shift=b) | Q(target_shift=b)
-            ).exclude(id=swap.id).delete()[0]
-            logger.debug(f"🗑️ Deleted {deleted_after} related swap requests AFTER swap.")
+            ).exclude(id=swap.id).delete()
 
             swap.approved_by_target = True
             swap.approved_by_admin = True
@@ -787,6 +1017,22 @@ class ShiftSwapAcceptView(APIView):
                 calendar=calendar
             )
             logger.debug("📬 Inbox notification created.")
+
+            # ✉️ Send email to requester
+            requester = swap.requested_by
+            if requester.notify_email and requester.email:
+                old_shift_dt = localtime(a.start_time).strftime("%A, %B %d at %I:%M %p")
+                new_shift_dt = localtime(b.start_time).strftime("%A, %B %d at %I:%M %p")
+
+                subject = "Your Shift Swap Was Approved"
+                message = (
+                    f"Hi {requester.first_name},\n\n"
+                    f"Your shift swap has been approved by {receiver.first_name} {receiver.last_name}.\n\n"
+                    f"You no longer work your original shift on **{old_shift_dt}**, and instead, "
+                    f"you’ve been scheduled to work on **{new_shift_dt}**.\n\n"
+                    f"Thanks for using ScheduLounge!"
+                )
+                send_notification_email(subject, message, requester.email)
 
         return Response({
             "message": "Swap approved successfully.",
@@ -846,21 +1092,89 @@ class ShiftTakeRequestView(APIView):
         return Response({"message": "Take request submitted."})
 
 
+# class ShiftTakeAcceptView(APIView):
+#     permission_classes = [permissions.IsAuthenticated]
+
+#     def post(self, request, take_id):
+#         try:
+#             take = ShiftTakeRequest.objects.select_related(
+#                 "shift", "shift__schedule__calendar", "requested_by", "requested_to", "shift__employee"
+#             ).get(id=take_id)
+#         except ShiftTakeRequest.DoesNotExist:
+#             return Response({"error": "Request not found."}, status=404)
+
+#         calendar = take.shift.schedule.calendar
+
+#         # Permission checks
+#         is_target = take.requested_to == request.user
+#         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
+#         self.calendar = calendar
+#         has_perm = HasCalendarPermissionOrAdmin("approve_reject_take_requests").has_permission(request, self)
+
+#         if not (is_target or is_admin or has_perm):
+#             return Response({"error": "You do not have permission to accept this take request."}, status=403)
+
+#         requires_admin = calendar.require_take_approval
+
+#         # ✋ Target accepts, but admin approval still required
+#         if requires_admin and is_target and not (is_admin or has_perm):
+#             take.approved_by_target = True
+#             take.save()
+#             return Response({
+#                 "success": True,
+#                 "requires_admin_approval": True
+#             })
+
+#         # ✅ Admin or full approval path
+#         direction = "give" if take.requested_by == take.shift.employee else "take"
+
+#         with transaction.atomic():
+#             # 🔁 Transfer ownership
+#             if direction == "take":
+#                 take.shift.employee = take.requested_by
+#             else:
+#                 take.shift.employee = take.requested_to
+#             take.shift.save()
+
+#             InboxNotification.objects.create(
+#                 user=take.requested_by,
+#                 notification_type='TAKE_REQUEST',
+#                 message=f"Your shift take request for {format_shift_time(take.shift)} was approved.",
+#                 related_object_id=take.shift.id,
+#                 calendar=calendar
+#             )
+
+#             # ✅ Finalize
+#             take.approved_by_target = True
+#             take.approved_by_admin = True
+#             take.is_active = False
+#             take.save()
+
+#             # ✉️ Only send email if NO admin approval was required
+#             if not requires_admin:
+#                 notify_shift_take_request_approved(take)
+
+#         return Response({
+#             "success": True,
+#             "requires_admin_approval": False
+#         })
+
 class ShiftTakeAcceptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, take_id):
         try:
-            take = ShiftTakeRequest.objects.select_related("shift", "shift__schedule__calendar").get(id=take_id)
+            take = ShiftTakeRequest.objects.select_related(
+                "shift", "shift__schedule__calendar", "requested_by", "requested_to", "shift__employee"
+            ).get(id=take_id)
         except ShiftTakeRequest.DoesNotExist:
             return Response({"error": "Request not found."}, status=404)
 
         calendar = take.shift.schedule.calendar
 
-        # Permission checks
         is_target = take.requested_to == request.user
         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
-        self.calendar = calendar  # required for HasCalendarPermissionOrAdmin to work properly
+        self.calendar = calendar  # for HasCalendarPermissionOrAdmin
         has_perm = HasCalendarPermissionOrAdmin("approve_reject_take_requests").has_permission(request, self)
 
         if not (is_target or is_admin or has_perm):
@@ -868,7 +1182,7 @@ class ShiftTakeAcceptView(APIView):
 
         requires_admin = calendar.require_take_approval
 
-        # ✋ If admin approval is still needed, only mark as accepted by target
+        # ✋ CASE 1: Target accepts but admin approval required
         if requires_admin and is_target and not (is_admin or has_perm):
             take.approved_by_target = True
             take.save()
@@ -877,18 +1191,24 @@ class ShiftTakeAcceptView(APIView):
                 "requires_admin_approval": True
             })
 
-        # ✅ Admin or full approval path
+        # 🛑 CASE 2: Admin approves but target hasn't yet
+        if requires_admin and not take.approved_by_target and (is_admin or has_perm):
+            return Response({
+                "success": False,
+                "message": "Target user has not yet accepted this request.",
+                "requires_admin_approval": True
+            })
+
+        # ✅ CASE 3: Finalize (admin approval done, or not required)
         direction = "give" if take.requested_by == take.shift.employee else "take"
 
         with transaction.atomic():
-            # 🔁 Transfer ownership
             if direction == "take":
                 take.shift.employee = take.requested_by
             else:
                 take.shift.employee = take.requested_to
             take.shift.save()
 
-            from .models import InboxNotification
             InboxNotification.objects.create(
                 user=take.requested_by,
                 notification_type='TAKE_REQUEST',
@@ -897,11 +1217,13 @@ class ShiftTakeAcceptView(APIView):
                 calendar=calendar
             )
 
-            # ✅ Mark request resolved
             take.approved_by_target = True
             take.approved_by_admin = True
             take.is_active = False
             take.save()
+
+            # Only notify if fully approved (either admin not required, or admin is approving now)
+            notify_shift_take_request_approved(take)
 
         return Response({
             "success": True,
@@ -913,11 +1235,13 @@ class ShiftTakeRejectView(APIView):
 
     def post(self, request, take_id):
         try:
-            take = ShiftTakeRequest.objects.select_related("shift__schedule__calendar").get(id=take_id)
+            take = ShiftTakeRequest.objects.select_related("shift__schedule__calendar", "requested_by", "requested_to").get(id=take_id)
         except ShiftTakeRequest.DoesNotExist:
             return Response({"error": "Request not found."}, status=404)
 
         calendar = take.shift.schedule.calendar
+        requester = take.requested_by
+        approver = request.user
 
         # Permission checks
         is_target = take.requested_to == request.user
@@ -928,15 +1252,29 @@ class ShiftTakeRejectView(APIView):
         if not (is_target or is_admin or has_perm):
             return Response({"error": "You do not have permission to reject this take request."}, status=403)
 
+        # Create inbox notification
         InboxNotification.objects.create(
-            user=take.requested_by,
+            user=requester,
             notification_type='TAKE_REQUEST',
             message=f"Your shift take request for {format_shift_time(take.shift)} was rejected.",
             related_object_id=take.shift.id,
             calendar=calendar
         )
-        take.delete()
 
+        # Send email if requester has an address
+        if requester.email:
+            shift_time = format_shift_time(take.shift)
+            subject = "Shift Take Request Rejected"
+            body = textwrap.dedent(f"""\
+                Hi {requester.first_name or requester.username},
+
+                Your request to have your shift on {shift_time} taken by {take.requested_to.first_name or take.requested_to.username} has been rejected.
+
+                Please log in to manage your shifts or make another request.
+            """)
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [requester.email], fail_silently=True)
+
+        take.delete()
         return Response({"message": "Shift take request rejected."})
 
 class ShiftTakeRequestListView(APIView):
@@ -1516,12 +1854,14 @@ class CalendarTimeOffApprovalListView(ListAPIView):
 
 
 # Approve a specific time off request
+from notifications.email_utils import send_notification_email  # make sure this is imported
+
 class TimeOffApproveView(APIView):
     permission_classes = [HasCalendarPermissionOrAdmin('approve_reject_time_off')]
 
     def post(self, request, calendar_id, pk):
         try:
-            timeoff = TimeOffRequest.objects.get(id=pk, calendar_id=calendar_id)
+            timeoff = TimeOffRequest.objects.select_related('employee').get(id=pk, calendar_id=calendar_id)
         except TimeOffRequest.DoesNotExist:
             return Response({'error': 'Time off not found.'}, status=404)
 
@@ -1530,8 +1870,43 @@ class TimeOffApproveView(APIView):
         timeoff.rejection_reason = ''
         timeoff.save()
 
+        employee = timeoff.employee
+        if employee.notify_email and employee.email:
+            start_str = timeoff.start_date.strftime("%m/%d/%Y")
+            end_str = timeoff.end_date.strftime("%m/%d/%Y")
+            if timeoff.start_date == timeoff.end_date:
+                date_phrase = f"on {start_str}"
+            else:
+                date_phrase = f"from {start_str} to {end_str}"
+
+            subject = "Your Time Off Request Was Approved"
+            message = (
+                f"Hi {employee.first_name},\n\n"
+                f"Your time off request {date_phrase} has been approved."
+            )
+            send_notification_email(subject, message, employee.email)
+
         return Response({'success': 'Time off approved.'}, status=200)
 
+
+# class TimeOffRejectView(APIView):
+#     permission_classes = [HasCalendarPermissionOrAdmin('approve_reject_time_off')]
+
+#     def post(self, request, calendar_id, pk):
+#         reason = request.data.get('rejection_reason', '')
+
+#         try:
+#             timeoff = TimeOffRequest.objects.get(id=pk, calendar_id=calendar_id)
+#         except TimeOffRequest.DoesNotExist:
+#             return Response({'error': 'Time off not found.'}, status=404)
+
+#         timeoff.status = 'denied'
+#         timeoff.visible_to_others = False
+#         timeoff.rejection_reason = reason
+#         timeoff.save()
+
+#         # TODO: Create inbox notification for rejection (we'll add this after)
+#         return Response({'success': 'Time off rejected.'}, status=200)
 
 class TimeOffRejectView(APIView):
     permission_classes = [HasCalendarPermissionOrAdmin('approve_reject_time_off')]
@@ -1539,17 +1914,54 @@ class TimeOffRejectView(APIView):
     def post(self, request, calendar_id, pk):
         reason = request.data.get('rejection_reason', '')
 
-        try:
-            timeoff = TimeOffRequest.objects.get(id=pk, calendar_id=calendar_id)
-        except TimeOffRequest.DoesNotExist:
-            return Response({'error': 'Time off not found.'}, status=404)
+        timeoff = get_object_or_404(TimeOffRequest.objects.select_related("employee", "calendar"), id=pk, calendar_id=calendar_id)
 
+        # Format dates
+        start_str = timeoff.start_date.strftime("%m/%d/%Y")
+        end_str = timeoff.end_date.strftime("%m/%d/%Y")
+        date_range_str = start_str if start_str == end_str else f"{start_str} – {end_str}"
+
+        # Update time off status
         timeoff.status = 'denied'
         timeoff.visible_to_others = False
         timeoff.rejection_reason = reason
         timeoff.save()
 
-        # TODO: Create inbox notification for rejection (we'll add this after)
+        # Create inbox notification
+        message = f"Your request for time off ({date_range_str}) was denied."
+        if reason:
+            message += f"\n\nReason: {reason}"
+
+        InboxNotification.objects.create(
+            user=timeoff.employee,
+            calendar=timeoff.calendar,
+            notification_type='TIME_OFF',
+            related_object_id=timeoff.id,
+            message=message,
+            sender=request.user,
+        )
+
+        # Send email
+        subject = f"Time Off Request Denied — {date_range_str}"
+        email_body = f"""Hi {timeoff.employee.first_name or timeoff.employee.username},
+
+        Your request for time off ({date_range_str}) was denied.
+        \n Please reach out to your manager if you believe this to be a mistake.
+        """
+
+        if reason:
+            email_body += f"\nReason provided: {reason}\n"
+
+        email_body += "\nPlease log in to view more details."
+
+        send_mail(
+            subject,
+            email_body,
+            'schedulounge@gmail.com',
+            [timeoff.employee.email],
+            fail_silently=True
+        )
+
         return Response({'success': 'Time off rejected.'}, status=200)
 
 class CalendarMemberDeleteView(APIView):
@@ -1624,27 +2036,29 @@ class ScheduleNotificationView(APIView):
 
     def post(self, request, calendar_id, schedule_id):
         try:
-            schedule = Schedule.objects.get(id=schedule_id, calendar_id=calendar_id)
+            schedule = Schedule.objects.select_related('calendar').get(id=schedule_id, calendar_id=calendar_id)
         except Schedule.DoesNotExist:
             return Response({'error': 'Schedule not found'}, status=404)
 
         members = CalendarMembership.objects.filter(calendar_id=calendar_id).select_related('user')
-        
-        # ✅ Include optional notes
         release_notes = request.data.get('notes', '').strip()
-        message = f"A new schedule has been released: {schedule.name or schedule.start_date}.\n"
-        if release_notes:
-            message += f"\n\n**Rlease Notes:**\n{release_notes}"
 
-        # Step 1: Deactivate old notifications
+        calendar_name = schedule.calendar.name
+        schedule_name = schedule.name or str(schedule.start_date)
+        message = f"A new schedule has been released: {schedule_name}.\n"
+        if release_notes:
+            message += f"\n\n**Release Notes:**\n{release_notes}"
+
+        # 🔄 Clear old notifications
         InboxNotification.objects.filter(
             related_object_id=schedule_id,
             notification_type='SCHEDULE_RELEASE'
         ).update(is_active=False, is_read=True)
 
-        # Step 2: Create new notifications
-        notifications = [
-            InboxNotification(
+        # 📨 Create inbox + send email
+        notifications = []
+        for member in members:
+            InboxNotification.objects.create(
                 user=member.user,
                 calendar_id=calendar_id,
                 notification_type='SCHEDULE_RELEASE',
@@ -1653,11 +2067,42 @@ class ScheduleNotificationView(APIView):
                 is_active=True,
                 is_read=False
             )
-            for member in members
-        ]
+            self.notify_schedule_release(schedule, member.user, release_notes)
 
-        InboxNotification.objects.bulk_create(notifications)
         return Response({'message': 'Schedule release notification sent!'})
+
+    def notify_schedule_release(self, schedule, user, release_notes):
+        start_str = schedule.start_date.strftime("%m/%d/%Y")
+        end_str = schedule.end_date.strftime("%m/%d/%Y")
+
+        subject = f"New Schedule Released: {schedule.name or f'{start_str} – {end_str}'}"
+        body = textwrap.dedent(f"""\
+            Hi {user.first_name or user.username},
+
+            A new schedule has been released for the calendar "{schedule.calendar.name}".
+
+            Schedule: {schedule.name or f'{start_str} – {end_str}'}
+            Dates: {start_str} – {end_str}
+
+        """)
+        if release_notes:
+            body += textwrap.dedent(f"""\
+            
+            Release Notes:
+            {release_notes}
+            """)
+
+        # Always append final line
+        body += "\nPlease log in to review and confirm your shifts."
+
+        if user.email:
+            send_mail(
+                subject,
+                body,
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=True
+            )
 
 class ScheduleConfirmView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1712,19 +2157,20 @@ class ScheduleRemindUnconfirmedView(APIView):
         calendar = schedule.calendar
         sender = request.user
 
-        # Find confirmed users
         confirmed_user_ids = ScheduleConfirmation.objects.filter(
             schedule=schedule
         ).values_list('user_id', flat=True)
 
-        # Get all members who are not in the confirmed list
         unconfirmed_members = ScheduleMembership.objects.filter(
             schedule=schedule
-        ).exclude(user__id__in=confirmed_user_ids)
+        ).exclude(user__id__in=confirmed_user_ids).select_related('user')
 
         notifications = []
+
         for membership in unconfirmed_members:
             user = membership.user
+
+            # ✅ Inbox notification message
             msg = (
                 f"Reminder: A new schedule **{schedule.name}** has been released.\n\n"
                 "REMINDER: Please confirm that you have seen and viewed the schedule."
@@ -1733,10 +2179,35 @@ class ScheduleRemindUnconfirmedView(APIView):
                 user=user,
                 calendar=calendar,
                 message=msg,
-                related_object_id=schedule.id,  # ✅ Use related_object_id
-                notification_type="SCHEDULE_RELEASE",  # ✅ Use notification_type
+                related_object_id=schedule.id,
+                notification_type="SCHEDULE_RELEASE",
                 sender=sender,
             ))
+
+            # ✅ Email
+            start_str = schedule.start_date.strftime("%m/%d/%Y")
+            end_str = schedule.end_date.strftime("%m/%d/%Y")
+            subject = f"Reminder to Confirm Schedule: {schedule.name or f'{start_str} – {end_str}'}"
+
+            body = textwrap.dedent(f"""\
+                Hi {user.first_name or user.username},
+
+                This is a reminder to confirm the schedule released for the calendar "{calendar.name}".
+
+                Schedule: {schedule.name or f'{start_str} – {end_str}'}
+                Dates: {start_str} – {end_str}
+
+                Please log in to review and confirm your shifts.
+            """)
+
+            if user.email:
+                send_mail(
+                    subject,
+                    body,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [user.email],
+                    fail_silently=True
+                )
 
         InboxNotification.objects.bulk_create(notifications)
 

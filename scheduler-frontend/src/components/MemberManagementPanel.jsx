@@ -55,6 +55,7 @@ export default function MembershipManagementPanel({
             console.error('Failed to remove member:', err);
         }
     };
+
     useEffect(() => {
         setLocalMembers(members);
     }, [members]);
@@ -194,18 +195,10 @@ export default function MembershipManagementPanel({
                     Cancel
                     </button>
                     <button
-                    onClick={async () => {
-                        try {
-                        await axios.delete(`/api/calendars/${calendarId}/members/${confirmRemoveMember.id}/remove/`);
-                        setLocalMembers(prev => prev.filter(m => m.id !== confirmRemoveMember.id));
-                        setConfirmRemoveMember(null);
-                        } catch (err) {
-                        console.error('Failed to remove member:', err);
-                        }
-                    }}
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                    >
-                    Remove
+                        onClick={() => handleRemoveMember(confirmRemoveMember.id, confirmRemoveMember.name)}
+                        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                        Remove
                     </button>
                 </div>
                 </div>

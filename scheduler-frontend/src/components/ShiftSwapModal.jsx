@@ -14,6 +14,11 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
   const [isOwnShift, setIsOwnShift] = useState(false);
   const [mode, setMode] = useState('swap'); // 'swap' or 'take'
   const [isEditing, setIsEditing] = useState(false);
+  const [approvingSwapId, setApprovingSwapId] = useState(null);
+  const [approvingTakeId, setApprovingTakeId] = useState(null);
+  const [rejectingTakeId, setRejectingTakeId] = useState(null);
+  const [rejectingSwapId, setRejectingSwapId] = useState(null);
+
 
   useEffect(() => {
     if (shift && currentUserId !== undefined) {
@@ -105,6 +110,7 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
 
 
   const handleApprove = async (swapId) => {
+    setApprovingSwapId(swapId);
     try {
       const res = await axios.post(`/api/shifts/swap/${swapId}/accept/`);
       const { requires_admin_approval, approved_by_target, approved_by_admin, message } = res.data;
@@ -128,19 +134,26 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     } catch (err) {
       console.error('Error approving swap:', err);
     }
+    finally {
+      setApprovingSwapId(null);
+    }
   };
 
   const handleReject = async (swapId) => {
+    setRejectingSwapId(swapId);
     try {
       await axios.post(`/api/shifts/swap/${swapId}/reject/`);
       setSuccessMessage('Swap rejected.');
       await fetchPendingSwaps();
     } catch (err) {
       console.error('Error rejecting swap:', err);
+    } finally {
+      setRejectingSwapId(null);
     }
   };
 
   const handleApproveTake = async (takeId) => {
+    setApprovingTakeId(takeId);
     try {
       const res = await axios.post(`/api/shifts/take/${takeId}/accept/`);
       const { requires_admin_approval } = res.data || {};
@@ -156,15 +169,22 @@ export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, 
     } catch (err) {
       console.error('Error approving take:', err);
     }
+    finally {
+      setApprovingTakeId(null);
+    }
   };
 
   const handleRejectTake = async (takeId) => {
+    setRejectingTakeId(takeId);
     try {
       await axios.post(`/api/shifts/take/${takeId}/reject/`);
       setSuccessMessage('Take rejected.');
       await fetchPendingTakes();
     } catch (err) {
       console.error('Error rejecting take:', err);
+    }
+    finally {
+      setRejectingTakeId(null);
     }
   };
 
@@ -505,18 +525,24 @@ console.log("🔍 yourShifts:", yourShifts);
                               </div>
                             ) : (
                               <div className="flex gap-3">
+                                {rejectingTakeId !== req.id && (
                                 <button
                                   onClick={() => handleApproveTake(req.id)}
                                   className="text-green-600 hover:underline"
+                                  disabled={approvingTakeId === req.id}
                                 >
-                                  Approve
+                                  {approvingTakeId === req.id ? 'Accepting...' : 'Approve'}
                                 </button>
+                              )}
+                                {approvingTakeId !== req.id && (
                                 <button
                                   onClick={() => handleRejectTake(req.id)}
                                   className="text-red-600 hover:underline"
+                                  disabled={rejectingTakeId === req.id}
                                 >
-                                  Reject
+                                  {rejectingTakeId === req.id ? 'Rejecting...' : 'Reject'}
                                 </button>
+                              )}
                               </div>
                             )}
                           </>
@@ -593,8 +619,32 @@ console.log("🔍 yourShifts:", yourShifts);
                           </div>
                         ) : (
                           <>
-                            <button onClick={() => handleApprove(req.id)} className="text-green-600 hover:underline">Approve</button>
-                            <button onClick={() => handleReject(req.id)} className="text-red-600 hover:underline">Reject</button>
+                            {/* <button onClick={() => handleApprove(req.id)} className="text-green-600 hover:underline" disabled={approvingSwapId === req.id}>{approvingSwapId === req.id ? 'Accepting...' : 'Approve'}</button>
+                            <button
+                              onClick={() => handleReject(req.id)}
+                              className="text-red-600 hover:underline"
+                              disabled={rejectingSwapId === req.id}
+                            >
+                              {rejectingSwapId === req.id ? 'Rejecting...' : 'Reject'}
+                            </button> */}
+                            {rejectingSwapId !== req.id && (
+                              <button
+                                onClick={() => handleApprove(req.id)}
+                                className="text-green-600 hover:underline"
+                                disabled={approvingSwapId === req.id}
+                              >
+                                {approvingSwapId === req.id ? 'Accepting...' : 'Approve'}
+                              </button>
+                            )}
+                            {approvingSwapId !== req.id && (
+                              <button
+                                onClick={() => handleReject(req.id)}
+                                className="text-red-600 hover:underline"
+                                disabled={rejectingSwapId === req.id}
+                              >
+                                {rejectingSwapId === req.id ? 'Rejecting...' : 'Reject'}
+                              </button>
+                            )}
                           </>
                         )
                       )}

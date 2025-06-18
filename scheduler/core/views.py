@@ -28,7 +28,8 @@ from .models import (
     InboxNotification,
     WorkplaceHoliday,
     CalendarPermission,
-    ScheduleConfirmation
+    ScheduleConfirmation,
+    CalendarInvite
 )
 from .serializers import (
     RegisterSerializer,
@@ -688,32 +689,60 @@ class CalendarListView(generics.ListAPIView):
         return Calendar.objects.filter(members=self.request.user)
 
 class CalendarInviteView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, calendar_id):
-        username = request.data.get('username')
-        role = request.data.get('role', 'staff')
+        calendar = get_object_or_404(Calendar, id=calendar_id)
 
+        # Permission check
+        if not CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists():
+            return Response({"error": "You don't have permission to invite members."}, status=403)
+
+        email_or_username = request.data.get("email_or_username")
+        if not email_or_username:
+            return Response({"error": "Missing email or username."}, status=400)
+
+        token = uuid.uuid4().hex
+        invite = CalendarInvite.objects.create(
+            calendar=calendar,
+            invited_by=request.user,
+            email_or_username=email_or_username,
+            token=token
+        )
+
+        # Optional: resolve user immediately
         try:
-            calendar = Calendar.objects.get(id=calendar_id)
-        except Calendar.DoesNotExist:
-            return Response({"error": "Calendar not found."}, status=404)
-
-        # Only admins can invite
-        membership = CalendarMembership.objects.filter(user=request.user, calendar=calendar, role='admin').first()
-        if not membership:
-            return Response({"error": "You are not an admin of this calendar."}, status=403)
-
-        try:
-            user = User.objects.get(username=username)
+            user = User.objects.get(Q(email=email_or_username) | Q(username=email_or_username))
+            # Auto-add them as pending if desired
+            # Or notify them via InboxNotification
         except User.DoesNotExist:
-            return Response({"error": "User not found."}, status=404)
+            pass
 
-        _, created = CalendarMembership.objects.get_or_create(user=user, calendar=calendar, defaults={'role': role})
-        if not created:
-            return Response({"message": "User already in calendar."})
+        # Send email
+        if "@" in email_or_username:
+            invite_link = f"{settings.FRONTEND_URL}/join/{token}/"
+            send_mail(
+                "You're invited to join a calendar",
+                f"You were invited to join the calendar \"{calendar.name}\".\n\nJoin here: {invite_link}",
+                settings.DEFAULT_FROM_EMAIL,
+                [email_or_username],
+                fail_silently=True
+            )
 
-        return Response({"message": f"{user.username} added to calendar as {role}."})
+        return Response({"message": "Invite sent successfully."})
+
+class AcceptInviteView(APIView):
+    def post(self, request, token):
+        try:
+            invite = CalendarInvite.objects.get(token=token, accepted=False)
+        except CalendarInvite.DoesNotExist:
+            return Response({"error": "Invalid or expired invite."}, status=404)
+
+        invite.accepted = True
+        invite.save()
+
+        CalendarMembership.objects.get_or_create(user=request.user, calendar=invite.calendar)
+        return Response({"message": "Successfully joined the calendar."})
 
 class CalendarJoinByCodeView(APIView):
     permission_classes = [permissions.IsAuthenticated]

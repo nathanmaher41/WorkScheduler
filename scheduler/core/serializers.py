@@ -17,6 +17,7 @@ from .models import(
     WorkplaceHoliday,
     CalendarPermission,
     ScheduleConfirmation,
+    CalendarInvite
 )
 
 
@@ -589,3 +590,9 @@ class UnifiedHistorySerializer(serializers.Serializer):
             }
 
         return {}
+
+class CalendarInviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalendarInvite
+        fields = ['id', 'calendar', 'email_or_username', 'invited_by', 'token', 'created_at', 'accepted']
+        read_only_fields = ['invited_by', 'token', 'created_at', 'accepted']

@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EditCalendarNameModal from './EditCalendarNameModal';
 import ConfirmDeleteCalendarModal from './ConfirmDeleteCalendarModal';
+import ShareInviteModal from './ShareInviteModal';
+
 
 function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMenuOpen, onToggleMenu, isAdmin, onRename }) {
   const navigate = useNavigate();
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+
 
   const dropdownItemClass = "w-full text-left px-4 py-2 text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600";
 
@@ -45,13 +49,13 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
             </button>
             <button
               onClick={() => {
-                onShare(calendar);
+                setShowShareModal(true);
                 onToggleMenu();
               }}
               className={dropdownItemClass}
             >
               📤 Share
-            </button>
+          </button>
             {isAdmin && (
               <>
                 <button
@@ -107,6 +111,14 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
           Open Calendar
         </button>
       </div>
+
+      {showShareModal && (
+        <ShareInviteModal
+          calendarId={calendar.id}
+          calendarName={calendar.name}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
 
       {showEditModal && (
         <EditCalendarNameModal

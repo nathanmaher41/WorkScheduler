@@ -14,7 +14,7 @@ export default function DarkTest() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white text-black dark:bg-gray-900 dark:text-white transition-colors duration-300">
-      <h1 className="text-4xl font-bold mb-4">ScheduaLounge</h1>
+      <h1 className="text-4xl font-bold mb-4">ScheduLounge</h1>
       <p className="mb-6">Now dark mode should work 🎉</p>
       <button
         onClick={() => setDark(prev => !prev)}

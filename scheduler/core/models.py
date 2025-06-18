@@ -229,3 +229,15 @@ class ScheduleConfirmation(models.Model):
 
     def __str__(self):
         return f"{self.user.username} confirmed {self.schedule.name}"
+
+class CalendarInvite(models.Model):
+    calendar = models.ForeignKey(Calendar, on_delete=models.CASCADE)
+    invited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_calendar_invites')
+    email_or_username = models.CharField(max_length=150)
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted = models.BooleanField(default=False)
+    resolved_user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='received_calendar_invites')
+
+    def __str__(self):
+        return f"Invite to {self.calendar.name} → {self.email_or_username}"

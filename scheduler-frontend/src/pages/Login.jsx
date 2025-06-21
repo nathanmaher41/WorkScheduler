@@ -32,7 +32,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 text-black dark:text-white transition-colors">
       <div className="bg-gray-100 dark:bg-gray-800 p-8 rounded-xl shadow-md w-full max-w-md">
-        <h1 className="text-3xl font-extrabold text-center mb-4 text-purple-600">ScheduaLounge</h1>
+        <h1 className="text-3xl font-extrabold text-center mb-4 text-purple-600">ScheduLounge</h1>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
             type="text"
@@ -51,6 +51,11 @@ export default function Login() {
             Login
           </button>
           {error && <p className="text-red-500 text-sm">{error}</p>}
+          <p className="text-sm text-center mt-2">
+            <Link to="/forgot-password" className="text-blue-600 dark:text-blue-400 hover:underline">
+              Forgot your password?
+            </Link>
+          </p>
         </form>
         <p className="text-sm mt-4 text-gray-700 dark:text-gray-300 text-center">
           Don't have an account?{' '}

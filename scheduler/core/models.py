@@ -16,6 +16,12 @@ class User(AbstractUser):
     show_middle_name = models.BooleanField(default=True)
     notify_email = models.BooleanField(default=True)
     notify_sms = models.BooleanField(default=False)
+    email = models.EmailField(unique=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["email"]),
+        ]
 
 class Schedule(models.Model):
     name = models.CharField(max_length=100)
@@ -179,6 +185,7 @@ class InboxNotification(models.Model):
         ('SCHEDULE_RELEASE', 'Schedule Release'),
         ('REQUEST_OFF_APPROVAL', 'Request Off Approval'),
         ('ANNOUNCEMENT', 'Announcement'),
+        ('CALENDAR_INVITE', 'Calendar Invite')
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
@@ -192,7 +199,7 @@ class InboxNotification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    related_object_id = models.IntegerField(null=True, blank=True)
+    related_object_id = models.CharField(max_length=255, blank=True, null=True)
     calendar = models.ForeignKey(Calendar, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
 
     def __str__(self):

@@ -11,6 +11,10 @@ import CompleteProfile from "./pages/CompleteProfile";
 import DarkTest from './components/DarkTest';
 import CalendarView from "./pages/CalendarView";
 import AdminPanel from "./pages/AdminPanel"; // ✅ Import your admin panel
+import JoinRedirectHandler from "./components/JoinRedirectHandler";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+ import ResetPasswordConfirmPage from './pages/ResetPasswordConfirmPage';
 
 function App() {
   return (
@@ -25,6 +29,11 @@ function App() {
         <Route path="/complete-profile" element={<CompleteProfile />} />
         <Route path="/calendar/:id" element={<CalendarView />} />
         <Route path="/calendar/:id/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} /> {/* ✅ New route */}
+        <Route path="/join/:token" element={<JoinRedirectHandler />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:uidb64/:token" element={<ResetPasswordPage />} />   
+
+        <Route path="/reset-password" element={<ProtectedRoute><ResetPasswordConfirmPage /></ProtectedRoute>} />
         <Route
           path="/dashboard"
           element={

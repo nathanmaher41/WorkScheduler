@@ -7,6 +7,7 @@ const TABS = [
   { label: 'Take Requests', value: 'TAKE_REQUEST' },
   { label: 'Schedule Releases', value: 'SCHEDULE_RELEASE' },
   { label: 'Request Off Approvals', value: 'REQUEST_OFF_APPROVAL' },
+  {label: 'Calendar Invite', value: 'CALENDAR_INVITE'}
 ];
 
 export default function DashboardInboxModal({ isOpen, onClose }) {
@@ -91,20 +92,36 @@ export default function DashboardInboxModal({ isOpen, onClose }) {
             <div key={calendarName} className="mb-6">
               <h3 className="text-md font-bold mt-4 mb-2 text-purple-500">{calendarName}</h3>
               <ul className="space-y-3">
-                {notes.map((note) => (
-                  <li
-                    key={note.id}
-                    className={`p-3 rounded transition border 
-                      ${note.is_active ? 'border-blue-400' : 'border-transparent'} 
-                      ${note.is_read ? 'bg-gray-100 dark:bg-gray-700' : 'bg-blue-100 dark:bg-blue-800'}
-                    `}
-                  >
-                    <p className="text-sm text-gray-900 dark:text-white">{note.message}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {new Date(note.created_at).toLocaleDateString() + ', ' + new Date(note.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                    </p>
-                  </li>
-                ))}
+                {notes.map((note) => {
+                  console.log('Notification Type:', note.notification_type);
+                  return (
+                    <li
+                      key={note.id}
+                      className={`p-3 rounded transition border 
+                        ${note.is_active ? 'border-blue-400' : 'border-transparent'} 
+                        ${note.is_read ? 'bg-gray-100 dark:bg-gray-700' : 'bg-blue-100 dark:bg-blue-800'}
+                      `}
+                    >
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm text-gray-900 dark:text-white">{note.message}</p>
+                        {note.notification_type === 'CALENDAR_INVITE' && (
+                          <button
+                            onClick={() => {
+                              onClose();
+                              window.location.href = `/join/${note.related_object_id}/`;
+                            }}
+                            className="ml-4 text-xs px-2 py-1 rounded bg-purple-600 text-white hover:bg-purple-700"
+                          >
+                            Join
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {new Date(note.created_at).toLocaleDateString() + ', ' + new Date(note.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      </p>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))

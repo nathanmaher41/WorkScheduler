@@ -56,7 +56,8 @@ from .serializers import (
     CalendarMembershipPermissionSerializer,
     CustomTokenObtainPairSerializer,
     ScheduleWithConfirmationsSerializer,
-    UnifiedHistorySerializer
+    UnifiedHistorySerializer,
+    CalendarInviteSerializer
 )
 from django.core.mail import send_mail
 from django.utils.http import urlsafe_base64_encode
@@ -64,7 +65,6 @@ from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.urls import reverse
 from django.utils.http import urlsafe_base64_decode
-from django.contrib.auth.tokens import default_token_generator
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -85,9 +85,13 @@ from django.core.mail import EmailMultiAlternatives
 import os
 from notifications.email_utils import send_notification_email
 import textwrap
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from django.utils.crypto import get_random_string
+
+
+
 User = get_user_model()
-
-
 #helper functions
 def format_shift_time(shift):
     start = localtime(shift.start_time)
@@ -149,6 +153,30 @@ class RegisterView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save(is_active=False)
+
+        # ✅ Resolve any pending invites for this email
+        pending_invites = CalendarInvite.objects.filter(
+            email_or_username__iexact=user.email,
+            accepted=False
+        ).filter(
+            models.Q(resolved_user__isnull=True) | models.Q(resolved_user=user)
+        )
+
+        for invite in pending_invites:
+            invite.resolved_user = user
+            invite.save()
+
+            InboxNotification.objects.create(
+                user=user,
+                notification_type='CALENDAR_INVITE',
+                message=f"You’ve been invited to join the calendar \"{invite.calendar.name}\".",
+                related_object_id=invite.token,  # Use the invite's ID, not the calendar
+                calendar=invite.calendar,
+                is_read=False,
+                is_active=True
+            )
+
+        # ✅ Activation link logic (unchanged)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         activation_link = self.request.build_absolute_uri(
@@ -692,57 +720,115 @@ class CalendarInviteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, calendar_id):
-        calendar = get_object_or_404(Calendar, id=calendar_id)
+        calendar = Calendar.objects.filter(id=calendar_id).first()
+        if not calendar:
+            return Response({"error": "Calendar not found."}, status=404)
 
-        # Permission check
-        if not CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists():
-            return Response({"error": "You don't have permission to invite members."}, status=403)
+        # Check permission
+        is_admin = calendar.calendarmembership_set.filter(user=request.user, is_admin=True).exists()
+        if not is_admin:
+            return Response({"error": "You don’t have permission to invite members."}, status=403)
 
-        email_or_username = request.data.get("email_or_username")
-        if not email_or_username:
-            return Response({"error": "Missing email or username."}, status=400)
+        value = request.data.get("email_or_username", "").strip()
+        if not value:
+            return Response({"error": "Please provide an email or username."}, status=400)
 
-        token = uuid.uuid4().hex
+        # Try to resolve to existing user
+        resolved_user = None
+        is_email = False
+        try:
+            validate_email(value)
+            is_email = True
+            resolved_user = User.objects.filter(email__iexact=value).first()
+        except ValidationError:
+            resolved_user = User.objects.filter(username__iexact=value).first()
+
+        # If it's neither a valid email nor username, reject
+        if not is_email and not resolved_user:
+            return Response({"error": "Invalid username or email."}, status=400)
+
+        # Avoid duplicates
+        # Check if user is already in calendar
+        if resolved_user and calendar.calendarmembership_set.filter(user=resolved_user).exists():
+            return Response({"error": "User is already a member of this calendar."}, status=400)
+
+        # Check for existing invite
+        existing = CalendarInvite.objects.filter(
+            calendar=calendar,
+            email_or_username__iexact=value,
+            accepted=False
+        ).first()
+
+        # Allow re-inviting if they are no longer a member
+        if existing and existing.resolved_user and calendar.calendarmembership_set.filter(user=existing.resolved_user).exists():
+            return Response({"error": "This user is already in the calendar."}, status=400)
+        elif existing:
+            existing.delete()
+
+        token = get_random_string(64)
         invite = CalendarInvite.objects.create(
             calendar=calendar,
             invited_by=request.user,
-            email_or_username=email_or_username,
-            token=token
+            email_or_username=value,
+            token=token,
+            resolved_user=resolved_user
         )
 
-        # Optional: resolve user immediately
-        try:
-            user = User.objects.get(Q(email=email_or_username) | Q(username=email_or_username))
-            # Auto-add them as pending if desired
-            # Or notify them via InboxNotification
-        except User.DoesNotExist:
-            pass
-
-        # Send email
-        if "@" in email_or_username:
-            invite_link = f"{settings.FRONTEND_URL}/join/{token}/"
-            send_mail(
-                "You're invited to join a calendar",
-                f"You were invited to join the calendar \"{calendar.name}\".\n\nJoin here: {invite_link}",
-                settings.DEFAULT_FROM_EMAIL,
-                [email_or_username],
-                fail_silently=True
+        # If the user already exists, send inbox notification
+        if resolved_user:
+            InboxNotification.objects.create(
+                user=resolved_user,
+                notification_type='CALENDAR_INVITE',
+                message=f"You’ve been invited to join the calendar \"{calendar.name}\".",
+                related_object_id=calendar.id,
+                calendar=calendar
             )
 
-        return Response({"message": "Invite sent successfully."})
+        # Send email
+        invite_link = f"{settings.FRONTEND_URL}/join/{token}/"
+        if is_email:
+            if resolved_user and resolved_user.notify_email:
+                subject = f"You're invited to join {calendar.name}"
+                body = f"You've been invited to join the calendar \"{calendar.name}\".\nClick to join: {invite_link}"
+            else:
+                subject = f"Join {calendar.name} on ScheduLounge"
+                body = f"You've been invited to join the calendar \"{calendar.name}\".\nSign up first, then you'll see the invite waiting.\n\nJoin here: {invite_link}"
+
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [value], fail_silently=True)
+
+        return Response(CalendarInviteSerializer(invite).data)
 
 class AcceptInviteView(APIView):
-    def post(self, request, token):
-        try:
-            invite = CalendarInvite.objects.get(token=token, accepted=False)
-        except CalendarInvite.DoesNotExist:
-            return Response({"error": "Invalid or expired invite."}, status=404)
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request, token):
+        invite = get_object_or_404(CalendarInvite, token=token)
+
+        if invite.accepted:
+            return Response({"message": "This invite has already been used."})
+
+        if invite.resolved_user and invite.resolved_user != request.user:
+            return Response({"error": "This invite was intended for a different user."}, status=403)
+
+        # Create calendar membership
+        membership, created = CalendarMembership.objects.get_or_create(
+            user=request.user,
+            calendar=invite.calendar
+        )
+
+        # Mark invite as accepted and link the user if not already linked
         invite.accepted = True
+        invite.resolved_user = request.user
         invite.save()
 
-        CalendarMembership.objects.get_or_create(user=request.user, calendar=invite.calendar)
-        return Response({"message": "Successfully joined the calendar."})
+        return Response({"message": "You’ve successfully joined the calendar."})
+
+class CalendarInviteDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, token):
+        invite = get_object_or_404(CalendarInvite, token=token)
+        return Response(CalendarInviteSerializer(invite).data)
 
 class CalendarJoinByCodeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1881,10 +1967,6 @@ class CalendarTimeOffApprovalListView(ListAPIView):
         calendar_id = self.kwargs['calendar_id']
         return TimeOffRequest.objects.filter(calendar_id=calendar_id, status='pending')
 
-
-# Approve a specific time off request
-from notifications.email_utils import send_notification_email  # make sure this is imported
-
 class TimeOffApproveView(APIView):
     permission_classes = [HasCalendarPermissionOrAdmin('approve_reject_time_off')]
 
@@ -2308,3 +2390,78 @@ class CalendarHistoryView(APIView):
         page = paginator.paginate_queryset(sorted_events, request)
         serializer = UnifiedHistorySerializer(page, many=True, context={'request': request})
         return paginator.get_paginated_response(serializer.data)
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({'error': 'Email is required.'}, status=400)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'message': 'If an account with that email exists, a reset link has been sent.'})
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        reset_link = f"http://localhost:5173/reset-password/{uid}/{token}/"
+
+
+        subject = 'Reset Your ScheduLounge Password'
+        text = f'Click the link below to reset your password:\n{reset_link}'
+        html = f'''
+        <p>Hi <strong>{user.username}</strong>,</p>
+        <p>You requested to reset your ScheduLounge password.</p>
+        <p><a href="{reset_link}" style="background:#6b46c1;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Reset Password</a></p>
+        <p>If the button doesn't work, use this link: <br/><a href="{reset_link}">{reset_link}</a></p>
+        '''
+
+        email_msg = EmailMultiAlternatives(
+            subject=subject,
+            body=text,
+            from_email=os.getenv("EMAIL_HOST_USER"),
+            to=[email]
+        )
+        email_msg.attach_alternative(html, "text/html")
+        email_msg.send()
+
+        return Response({'message': 'If an account with that email exists, a reset link has been sent.'})
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, uidb64, token):
+        password = request.data.get('password')
+        if not password:
+            return Response({'error': 'Password is required.'}, status=400)
+
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=uid)
+        except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+            return Response({'error': 'Invalid reset link.'}, status=400)
+
+        if not default_token_generator.check_token(user, token):
+            return Response({'error': 'Invalid or expired token.'}, status=400)
+
+        user.set_password(password)
+        user.save()
+
+        return Response({'message': 'Password reset successful.'})
+
+        
+class PasswordResetConfirmAuthenticatedView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        password = request.data.get('password')
+        if not password:
+            return Response({'error': 'Password is required.'}, status=400)
+
+        user = request.user
+        user.set_password(password)
+        user.save()
+
+        return Response({'message': 'Password reset successful.'})

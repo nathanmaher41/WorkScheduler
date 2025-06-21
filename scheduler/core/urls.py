@@ -75,7 +75,11 @@ from .views import (
     ScheduleConfirmationResetView,
     ScheduleRemindUnconfirmedView,
     CalendarHistoryView,
-    
+    AcceptInviteView,
+    CalendarInviteDetailView,
+    PasswordResetRequestView,
+    PasswordResetConfirmView,
+    PasswordResetConfirmAuthenticatedView
 )
 
 
@@ -106,6 +110,8 @@ urlpatterns = [
     path('calendars/', CalendarListView.as_view(), name='calendar-list'),
     path('calendars/create/', CalendarCreateView.as_view(), name='calendar-create'),
     path('calendars/<int:calendar_id>/invite/', CalendarInviteView.as_view(), name='calendar-invite'),
+    path('calendars/invite/accept/<str:token>/', AcceptInviteView.as_view(), name='calendar-invite-accept'),
+    path('calendar_invites/<str:token>/', CalendarInviteDetailView.as_view(), name='calendar-invite-detail'),
     path('calendars/join/', CalendarJoinByCodeView.as_view(), name='calendar-join'),
     path('calendars/<int:calendar_id>/members/', CalendarMemberListView.as_view(), name='calendar-members'),
     path('calendars/<int:pk>/', CalendarDetailView.as_view(), name='calendar-detail'),
@@ -158,5 +164,9 @@ urlpatterns = [
     path('schedules/<int:schedule_id>/confirmations/reset/', ScheduleConfirmationResetView.as_view(), name='schedule-confirmation-reset'),
     path('schedules/<int:schedule_id>/remind-unconfirmed/', ScheduleRemindUnconfirmedView.as_view()),
     path('calendars/<int:calendar_id>/history/', CalendarHistoryView.as_view(), name='calendar-history'),
+    path('password-reset/request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
+    path('password-reset/confirm/<uidb64>/<token>/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    path('password-reset/confirm-auth/', PasswordResetConfirmAuthenticatedView.as_view()),
+
 
 ]

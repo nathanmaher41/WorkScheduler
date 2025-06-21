@@ -220,6 +220,14 @@ export default function UserSettingsModal({ onClose }) {
                                     <p className="text-sm mb-1">Full Name: {getFullName()}</p>
                                     <p className="text-sm mb-1">Username: {userInfo.username}</p>
                                     <p className="text-sm">Email: {userInfo.email}</p>
+                                    <div className="mt-4">
+                                    <button
+                                        onClick={() => window.location.href = '/reset-password?from=settings'}
+                                        className="text-sm text-blue-600 dark:text-blue-400 underline"
+                                    >
+                                        Change Password
+                                    </button>
+                                    </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>

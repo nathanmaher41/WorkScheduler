@@ -1,13 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from '../utils/axios';
 
-export default function JoinCalendarModal({ onClose, onJoin }) {
-    const [code, setCode] = useState('');
+export default function JoinCalendarModal({ onClose, onJoin, prefilledCode }) {
+    const [code, setCode] = useState(prefilledCode || '');
     const [calendar, setCalendar] = useState(null);
     const [selectedRole, setSelectedRole] = useState('');
     const [selectedColor, setSelectedColor] = useState('');
     const [errors, setErrors] = useState({});
     const [alreadyJoinedMessage, setAlreadyJoinedMessage] = useState('');
+    const [inviteToken, setInviteToken] = useState(null);
+
+    useEffect(() => {
+        if (prefilledCode) {
+            axios.get(`/api/calendars/lookup/?code=${prefilledCode}`)
+                .then(res => {
+                    setCalendar(res.data);
+                    setInviteToken(res.data.invite_token || null);
+                })
+                .catch(() => {
+                    setErrors({ general: 'Failed to lookup calendar with provided code.' });
+                });
+        }
+    }, [prefilledCode]);
 
     const colors = [
         '#FF8A80', '#F8BBD0', '#E53935', '#B71C1C',
@@ -29,6 +43,7 @@ export default function JoinCalendarModal({ onClose, onJoin }) {
             const res = await axios.get(`/api/calendars/lookup/?code=${code}`);
             setCalendar(res.data);
             setErrors({});
+            setInviteToken(res.data.invite_token || null);
             if (res.data.already_joined) {
                 setAlreadyJoinedMessage('You are already a member of this calendar.');
             } else {
@@ -58,11 +73,18 @@ export default function JoinCalendarModal({ onClose, onJoin }) {
         }
 
         try {
-            await axios.post('/api/calendars/join/', {
-                join_code: code,
-                title_id: selectedRole,
-                color: selectedColor,
-            });
+            if (inviteToken) {
+                await axios.post(`/api/calendars/invite/accept/${inviteToken}/`, {
+                    title_id: selectedRole,
+                    color: selectedColor
+                });
+            } else {
+                await axios.post('/api/calendars/join/', {
+                    join_code: code,
+                    title_id: selectedRole,
+                    color: selectedColor,
+                });
+            }
             onJoin();
         } catch (err) {
             const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to join calendar.';

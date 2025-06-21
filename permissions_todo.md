@@ -2,59 +2,59 @@
 # ✅ Permissions-Based Conditional Rendering
 
 ## 🔐 General Admin Permissions
-- [ ] **Manage Calendar Settings**
+- [] **Manage Calendar Settings**
   - Conditionally render general, rules, role management sections in `CalendarSettingsModal`
-- [ ] **Manage Roles**
+- [x] **Manage Roles**
   - Allow toggling roles and editing role names
-- [ ] **Manage Colors**
+- [x] **Manage Colors**
   - _(Planned for removal)_
 
 ## 📅 Schedule & Shift Management
-- [ ] **Create/Edit/Delete Schedules**
+- [x] **Create/Edit/Delete Schedules**
   - Show kebab dropdown on schedule cards
   - Show “Create Schedule” button in `CalendarView`
-- [ ] **Create/Edit/Delete Shifts**
+- [x] **Create/Edit/Delete Shifts**
   - Conditionally render `ShiftCreateModal`
-- [ ] **Approve/Reject Swap Requests**
+- [x] **Approve/Reject Swap Requests**
   - Conditionally show review queue in Admin Panel (not yet built)
-- [ ] **Approve/Reject Take Requests**
+- [x] **Approve/Reject Take Requests**
   - Admin panel logic to handle takes (not yet built)
 
 ## 📆 Time Off & Holiday Management
-- [ ] **Approve/Reject Time Off**
+- [x] **Approve/Reject Time Off**
   - Admin panel review functionality (not yet built)
-- [ ] **Manage Holidays**
+- [x] **Manage Holidays**
   - Show holiday creation tools in `RequestOffModal`
   - Add **Holiday Modal** to edit/delete holidays
 
 ## 👥 Member Management
-- [ ] **Invite/Remove Members**
+- [x] **Invite/Remove Members**
   - Admin panel functionality (not yet built)
-- [ ] **Assign Roles**
+- [x] **Assign Roles**
   - Admin panel role assignment interface
-- [ ] **Promote/Demote Admins**
+- [x] **Promote/Demote Admins**
   - Conditionally show `PermissionsPanel` in `SettingsModal`
 
 ## 🔔 Notification & Communication
-- [ ] **Send Announcements**
+- [x] **Send Announcements**
   - Admin panel interface (not yet built)
 
 ## 🚨 Danger Zone
-- [ ] Only display if user has **all permissions**
+- [x] Only display if user has **all permissions** ISADMIN
 
 # 💡 Quality of Life Improvements
 
-- [ ] **Calendar Start/End Date Sync**
+- [x] **Calendar Start/End Date Sync**
   - When clicking a future month start date, ensure end date is set to same month
 - [ ] **Default Role on Calendar Creation**
   - If admin leaves role blank, fallback to `"None"` or skip adding role
-- [ ] **Notes in Shift Creation**
+- [x] **Notes in Shift Creation**
   - Show and persist `notes` input in `ShiftCreateModal`
 - [ ] **Login via Username or Email**
   - Allow flexible login with either
 - [ ] **Holiday Edit/Delete Modal**
   - New modal for updating or removing workplace holidays
-- [ ] **Show Role in Shift Modal**
+- [x] **Show Role in Shift Modal**
   - Add user’s role next to name in `ShiftSwapModal` / `ShiftCreateModal`
 
 # ⚙️ Rules Section (Settings Modal)

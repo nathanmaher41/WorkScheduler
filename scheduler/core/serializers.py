@@ -592,7 +592,19 @@ class UnifiedHistorySerializer(serializers.Serializer):
         return {}
 
 class CalendarInviteSerializer(serializers.ModelSerializer):
+    join_code = serializers.CharField(source='calendar.join_code', read_only=True)
+
     class Meta:
         model = CalendarInvite
-        fields = ['id', 'calendar', 'email_or_username', 'invited_by', 'token', 'created_at', 'accepted']
-        read_only_fields = ['invited_by', 'token', 'created_at', 'accepted']
+        fields = [
+            'id',
+            'calendar',
+            'invited_by',
+            'email_or_username',
+            'token',
+            'created_at',
+            'accepted',
+            'resolved_user',
+            'join_code',  # ⬅️ ADD THIS
+        ]
+        read_only_fields = ['invited_by', 'token', 'created_at', 'accepted', 'resolved_user']

@@ -10,6 +10,9 @@ import SettingsIcon from '../components/SettingsIcon';
 import CalendarIcon from '../components/CalendarIcon.jsx';
 import DashboardInboxModal from '../components/DashboardInboxModal';
 import ConfirmDeleteCalendarModal from '../components/ConfirmDeleteCalendarModal';
+import { useSearchParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+
 
 
 
@@ -26,9 +29,24 @@ export default function Dashboard() {
    const [sortMethod, setSortMethod] = useState('alphabetical');
    const [roleFilters, setRoleFilters] = useState([]);
    const [showInbox, setShowInbox] = useState(false);
+   const [searchParams, setSearchParams] = useSearchParams();
+
+
 
    const currentUsername = localStorage.getItem('username');
 
+   function useQuery() {
+    return new URLSearchParams(useLocation().search);
+    }
+
+    useEffect(() => {
+    const modalParam = searchParams.get('modal');
+    if (modalParam === 'settings') {
+        setShowSettingsModal(true);
+        searchParams.delete('modal');
+        setSearchParams(searchParams, { replace: true }); // clean up URL
+    }
+    }, [searchParams, setSearchParams]);
    useEffect(() => {
        const fetchCalendars = async () => {
            try {
@@ -40,6 +58,14 @@ export default function Dashboard() {
        };
        fetchCalendars();
    }, []);
+
+   useEffect(() => {
+    if (searchParams.get('join') === '1') {
+        setShowJoinModal(true);
+        searchParams.delete('join');
+        setSearchParams(searchParams, { replace: true });
+    }
+    }, [searchParams, setSearchParams]);
 
    useEffect(() => {
        if (!selectedCalendar) return;
@@ -78,6 +104,23 @@ export default function Dashboard() {
            setShowForm(false);
        }
    };
+
+   const [prefilledJoinCode, setPrefilledJoinCode] = useState('');
+    const query = useQuery();
+    const token = query.get("invite_token");
+
+    useEffect(() => {
+    if (token) {
+        axios.get(`/api/calendar_invites/${token}/`)
+        .then((res) => {
+            setPrefilledJoinCode(res.data.join_code);
+            setShowJoinModal(true);
+        })
+        .catch((err) => {
+            console.error("Invalid invite token", err);
+        });
+    }
+    }, [token]);
 
    const joinCalendar = async (code) => {
        try {
@@ -292,15 +335,16 @@ export default function Dashboard() {
                />
            )}
            {showJoinModal && (
-               <JoinCalendarModal
-                   onClose={() => setShowJoinModal(false)}
-                   onJoin={async () => {
-                       setShowJoinModal(false);
-                       const calendarsRes = await axios.get('/api/calendars/');
-                       setCalendars(calendarsRes.data);
-                   }}
-               />
-           )}
+                <JoinCalendarModal
+                    onClose={() => setShowJoinModal(false)}
+                    onJoin={async () => {
+                    setShowJoinModal(false);
+                    const calendarsRes = await axios.get('/api/calendars/');
+                    setCalendars(calendarsRes.data);
+                    }}
+                    prefilledCode={prefilledJoinCode}  // <== Add this line
+                />
+                )}
            {showSettingsModal && (
                <UserSettingsModal
                    onClose={() => setShowSettingsModal(false)}

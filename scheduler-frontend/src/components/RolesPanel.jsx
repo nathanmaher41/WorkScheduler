@@ -2,19 +2,16 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 
 export default function RolesPanel({ calendarId, roles: rolesProp = [] }) {
-  //const [roles, setRoles] = useState([]);
   const [newRoleName, setNewRoleName] = useState('');
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [editedRoleName, setEditedRoleName] = useState('');
   const [deleteError, setDeleteError] = useState(null);
+  const [roles, setRoles] = useState([]);
 
-    const [roles, setRoles] = useState([]);
+  useEffect(() => {
+    setRoles(rolesProp);
+  }, [rolesProp]);
 
-    useEffect(() => {
-        setRoles(rolesProp); // rename the prop to avoid collision
-    }, [rolesProp]);
-
-  console.log(roles);
   const handleAddRole = async () => {
     const trimmed = newRoleName.trim();
     if (!trimmed || roles.some(r => r.name === trimmed)) return;
@@ -86,56 +83,58 @@ export default function RolesPanel({ calendarId, roles: rolesProp = [] }) {
       </div>
 
       {roles.length > 0 && (
-        <ul className="space-y-1 text-sm text-black dark:text-white">
-          {roles.map((role) => (
-            <li
-              key={role.id}
-              className="flex justify-between items-center bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded"
-            >
-              {editingRoleId === role.id ? (
-                <input
-                  type="text"
-                  value={editedRoleName}
-                  onChange={(e) => setEditedRoleName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleUpdateRole(role.id);
-                    if (e.key === 'Escape') {
-                      setEditingRoleId(null);
-                      setEditedRoleName('');
-                    }
-                  }}
-                  className="flex-1 mr-2 border rounded px-2 py-1 dark:bg-gray-600 dark:text-white"
-                />
-              ) : (
-                <span>{role.name}</span>
-              )}
-
-              <div className="flex gap-2">
+        <div className="max-h-[300px] overflow-y-auto pr-2">
+          <ul className="space-y-1 text-sm text-black dark:text-white">
+            {roles.map((role) => (
+              <li
+                key={role.id}
+                className="flex justify-between items-center bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded"
+              >
                 {editingRoleId === role.id ? (
-                  <button
-                    onClick={() => handleUpdateRole(role.id)}
-                    className="text-green-600 hover:underline text-xs"
-                  >
-                    Save
-                  </button>
+                  <input
+                    type="text"
+                    value={editedRoleName}
+                    onChange={(e) => setEditedRoleName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleUpdateRole(role.id);
+                      if (e.key === 'Escape') {
+                        setEditingRoleId(null);
+                        setEditedRoleName('');
+                      }
+                    }}
+                    className="flex-1 mr-2 border rounded px-2 py-1 dark:bg-gray-600 dark:text-white"
+                  />
                 ) : (
-                  <button
-                    onClick={() => handleStartEditRole(role)}
-                    className="text-blue-600 hover:underline text-xs"
-                  >
-                    Edit
-                  </button>
+                  <span>{role.name}</span>
                 )}
-                <button
-                  onClick={() => handleRemoveRole(role.id)}
-                  className="text-red-600 hover:underline text-xs"
-                >
-                  Remove
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+
+                <div className="flex gap-2">
+                  {editingRoleId === role.id ? (
+                    <button
+                      onClick={() => handleUpdateRole(role.id)}
+                      className="text-green-600 hover:underline text-xs"
+                    >
+                      Save
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleStartEditRole(role)}
+                      className="text-blue-600 hover:underline text-xs"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleRemoveRole(role.id)}
+                    className="text-red-600 hover:underline text-xs"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {deleteError && (

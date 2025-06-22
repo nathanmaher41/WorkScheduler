@@ -33,7 +33,7 @@ export default function AnnouncementsPanel({ calendarId }) {
       setStatus('success');
       setAnnouncement('');
       setSenderName('');
-      fetchHistory(); // Refresh history
+      fetchHistory();
     } catch (err) {
       console.error('Failed to send announcement:', err);
       setStatus('error');
@@ -79,24 +79,26 @@ export default function AnnouncementsPanel({ calendarId }) {
 
       <div>
         <h2 className="text-lg font-semibold text-black dark:text-white mb-2">Announcement History</h2>
-        <ul className="divide-y divide-gray-300 dark:divide-gray-600">
-          {history.length === 0 ? (
-            <li className="text-sm text-gray-600 dark:text-gray-300">No announcements yet.</li>
-          ) : (
-            history.map((a) => {
-              const dt = new Date(a.created_at);
-              const formatted = `${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getDate().toString().padStart(2, '0')}/${dt.getFullYear()}, ${dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}`;
-              return (
-                <li key={a.id} className="py-2 text-sm">
-                  <div className="text-black dark:text-white">{a.message}</div>
-                  <div className="text-xs text-gray-500">
-                    {formatted} — <span className="font-semibold">{a.sender_name}</span>
-                  </div>
-                </li>
-              );
-            })
-          )}
-        </ul>
+        <div className="max-h-[300px] overflow-y-auto pr-2">
+          <ul className="divide-y divide-gray-300 dark:divide-gray-600">
+            {history.length === 0 ? (
+              <li className="text-sm text-gray-600 dark:text-gray-300">No announcements yet.</li>
+            ) : (
+              history.map((a) => {
+                const dt = new Date(a.created_at);
+                const formatted = `${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getDate().toString().padStart(2, '0')}/${dt.getFullYear()}, ${dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+                return (
+                  <li key={a.id} className="py-2 text-sm">
+                    <div className="text-black dark:text-white">{a.message}</div>
+                    <div className="text-xs text-gray-500">
+                      {formatted} — <span className="font-semibold">{a.sender_name}</span>
+                    </div>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>
       </div>
     </div>
   );

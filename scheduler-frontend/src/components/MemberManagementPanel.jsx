@@ -75,15 +75,18 @@ export default function MembershipManagementPanel({
         </div>
 
         <div className="overflow-x-auto">
-        <table className="min-w-full border border-gray-300 dark:border-gray-600">
-            <thead className="bg-gray-100 dark:bg-gray-700 text-sm text-gray-700 dark:text-white">
-            <tr>
-                <th className="p-2 text-left">Name</th>
-                <th className="p-2 text-left">Color</th>
-                <th className="p-2 text-left">Role</th>
-                <th className="p-2 text-left">Actions</th>
-            </tr>
-            </thead>
+            <table className="min-w-full border border-gray-300 dark:border-gray-600">
+                <thead className="bg-gray-100 dark:bg-gray-700 text-sm text-gray-700 dark:text-white sticky top-0 z-10">
+                <tr>
+                    <th className="p-2 text-left">Name</th>
+                    <th className="p-2 text-left">Color</th>
+                    <th className="p-2 text-left">Role</th>
+                    <th className="p-2 text-left">Actions</th>
+                </tr>
+                </thead>
+            </table>
+            <div className="max-h-[400px] overflow-y-auto border-t border-gray-300 dark:border-gray-600">
+            <table className="min-w-full">
             <tbody>
             {localMembers.map((m) => (
                 <tr key={m.membership_id} className="border-t border-gray-300 dark:border-gray-600">
@@ -177,7 +180,8 @@ export default function MembershipManagementPanel({
                 </tr>
             ))}
             </tbody>
-        </table>
+             </table>
+            </div>
         {confirmRemoveMember && (
             <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex justify-center items-center">
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full">

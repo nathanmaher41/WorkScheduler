@@ -12,8 +12,7 @@ export default function CreateCalendarModal({ onClose, onCreate }) {
 
   const colors = [
   '#FF8A80', '#F8BBD0', '#E53935', '#B71C1C',
-  '#D81B60', '#880E4F', '#FFD180', '#E65100',
-  '#FFF59D', '#FFEB3B', '#F9A825', '#A5D6A7',
+  '#D81B60', '#880E4F', '#FFD180', '#E65100', '#FFEB3B', '#F9A825', '#A5D6A7',
   '#43A047', '#1B5E20', '#B2DFDB', '#009688',
   '#004D40', '#90CAF9', '#1E88E5', '#0D47A1',
   '#CE93D8', '#8E24AA', '#4A148C', '#BCAAA4',

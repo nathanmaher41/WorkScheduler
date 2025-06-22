@@ -4,22 +4,24 @@ import EditCalendarNameModal from './EditCalendarNameModal';
 import ConfirmDeleteCalendarModal from './ConfirmDeleteCalendarModal';
 import ShareInviteModal from './ShareInviteModal';
 
-
 function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMenuOpen, onToggleMenu, isAdmin, onRename }) {
   const navigate = useNavigate();
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  
 
-
-  const dropdownItemClass = "w-full text-left px-4 py-2 text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600";
+  const dropdownItemClass =
+    'w-full text-left px-4 py-2 text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600';
 
   return (
     <div
       onClick={() => onSelect(calendar)}
-      className={`relative p-4 rounded-lg shadow cursor-pointer transition
-        ${isSelected ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white'}
-      `}
+      className={`relative p-4 rounded-lg shadow cursor-pointer transition ${
+        isSelected
+          ? 'bg-purple-600 text-white'
+          : 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white'
+      }`}
     >
       {/* Three dots menu */}
       <div className="absolute top-2 right-2">
@@ -28,16 +30,20 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
             e.stopPropagation();
             onToggleMenu();
           }}
-          className={`${isSelected ? 'text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-300'}`}
+          className={`${
+            isSelected
+              ? 'text-white'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-300'
+          }`}
         >
           ⋮
         </button>
 
         {isMenuOpen && (
           <div
-            className={`absolute right-0 mt-2 w-40 shadow-lg rounded-md z-10 
-              ${isSelected ? 'bg-white text-gray-800 dark:bg-gray-700 dark:text-white' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white'}`}
-            onClick={(e) => e.stopPropagation()}>
+            className="absolute right-0 mt-2 w-40 shadow-lg rounded-md z-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => {
                 navigator.clipboard.writeText(calendar.join_code);
@@ -55,7 +61,7 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
               className={dropdownItemClass}
             >
               📤 Share
-          </button>
+            </button>
             {isAdmin && (
               <>
                 <button
@@ -67,15 +73,6 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
                 >
                   ✏️ Edit Name
                 </button>
-                {/* <button
-                  onClick={() => {
-                    alert('Open settings modal');
-                    onToggleMenu();
-                  }}
-                  className={dropdownItemClass}
-                >
-                  ⚙️ Settings
-                </button> */}
               </>
             )}
             {onDelete && (
@@ -96,10 +93,12 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
       <h2 className="text-lg font-semibold">Calendar: {calendar.name}</h2>
       <p className="text-sm">–</p>
       <p className={`mt-2 ${isSelected ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>
-        Invite Code: <span className="font-mono bg-gray-700 text-white px-2 py-1 rounded">{calendar.join_code}</span>
+        Invite Code:{' '}
+        <span className="font-mono bg-gray-700 text-white px-2 py-1 rounded">
+          {calendar.join_code}
+        </span>
       </p>
 
-      {/* ✅ Open Button */}
       <div className="mt-4">
         <button
           onClick={(e) => {

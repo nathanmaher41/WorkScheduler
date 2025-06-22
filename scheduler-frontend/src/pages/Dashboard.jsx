@@ -316,9 +316,9 @@ export default function Dashboard() {
                            isMenuOpen={openMenuId === calendar.id}
                            onToggleMenu={() => setOpenMenuId(openMenuId === calendar.id ? null : calendar.id)}
                            onSelect={(calendar) => {
-                               setSelectedCalendar(calendar);
-                               setOpenMenuId(null);
-                           }}
+                            setOpenMenuId(null);              // ✅ Close any open menu
+                            setSelectedCalendar(calendar);   // ✅ Then update selected calendar
+                            }}
                            isAdmin={isCurrentUserAdmin}
                            onRename={handleCalendarRename}
                            onDelete={isCurrentUserAdmin ? handleDeleteCalendar : null}

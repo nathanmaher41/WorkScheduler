@@ -243,16 +243,16 @@ export default function ScheduleManagementPanel({ calendarId }) {
                 <h4 className="text-md font-semibold mb-2 text-black dark:text-white">Confirmed</h4>
                 <ul className="space-y-1 text-sm text-gray-800 dark:text-gray-300">
                     {confirmationData.confirmed_members.map(member => (
-                        <li key={member.id}>{member.first_name} {member.last_name}</li>
-                    ))}
+                        <li key={member.id}>{member.full_name}</li>
+                        ))}
                 </ul>
               </div>
               <div>
                 <h4 className="text-md font-semibold mb-2 text-black dark:text-white">Not Yet Confirmed</h4>
-                <ul className="space-y-1 text-sm text-gray-800 dark:text-gray-300">
-                    {confirmationData.unconfirmed_members.map(member => (
-                        <li key={member.id}>{member.first_name} {member.last_name}</li>
-                    ))}
+                <ul className="space-y-1 text-sm text-gray-800 dark:text-gray-300">            
+                {confirmationData.unconfirmed_members.map(member => (
+                <li key={member.id}>{member.full_name}</li>
+                ))}
                 </ul>
               </div>
             </div>

@@ -23,6 +23,20 @@ from .models import(
 
 User = get_user_model()
 
+def build_full_name(self, user):
+    parts = [user.first_name]
+    if user.show_middle_name and user.middle_name:
+        parts.append(user.middle_name)
+    parts.append(user.last_name)
+    return " ".join(part for part in parts if part).strip() or user.username
+
+def get_full_name_custom(user):
+    parts = [user.first_name]
+    if getattr(user, 'show_middle_name', False) and user.middle_name:
+        parts.append(user.middle_name)
+    parts.append(user.last_name)
+    return " ".join(part for part in parts if part).strip()
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True)
@@ -121,10 +135,15 @@ class ShiftSerializer(serializers.ModelSerializer):
             'position', 'employee', 'employee_name', 'color', 'notes'
         ]
 
+    def build_full_name(self, user):
+        parts = [user.first_name]
+        if user.show_middle_name and user.middle_name:
+            parts.append(user.middle_name)
+        parts.append(user.last_name)
+        return " ".join(part for part in parts if part).strip() or user.username
+
     def get_employee_name(self, obj):
-        first = obj.employee.first_name or ""
-        last = obj.employee.last_name or ""
-        return f"{first} {last}".strip()
+        return self.build_full_name(obj.employee)
 
     def get_color(self, obj):
         calendar = obj.schedule.calendar
@@ -202,7 +221,12 @@ class CalendarMembershipSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'full_name', 'role', 'is_admin', 'color', 'title_id', 'membership_id']
 
     def get_full_name(self, obj):
-        return f"{obj.user.first_name} {obj.user.last_name}".strip()
+        user = obj.user if hasattr(obj, 'user') else obj
+        parts = [user.first_name]
+        if user.show_middle_name and user.middle_name:
+            parts.append(user.middle_name)
+        parts.append(user.last_name)
+        return " ".join(part for part in parts if part).strip()
 
     def get_role(self, obj):
         if obj.title:
@@ -294,7 +318,12 @@ class CalendarMembershipSimpleSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'full_name', 'role', 'is_admin']
 
     def get_full_name(self, obj):
-        return f"{obj.user.first_name} {obj.user.last_name}".strip()
+        user = obj.user if hasattr(obj, 'user') else obj
+        parts = [user.first_name]
+        if user.show_middle_name and user.middle_name:
+            parts.append(user.middle_name)
+        parts.append(user.last_name)
+        return " ".join(part for part in parts if part).strip()
 
     def get_role(self, obj):
         return obj.title.name.upper() if obj.title else "None"
@@ -347,13 +376,21 @@ class ShiftSwapRequestSerializer(serializers.ModelSerializer):
             'start': obj.target_shift.start_time,
             'end': obj.target_shift.end_time,
         }
+
+    def build_full_name(self, user):
+        parts = [user.first_name]
+        if user.show_middle_name and user.middle_name:
+            parts.append(user.middle_name)
+        parts.append(user.last_name)
+        return " ".join(part for part in parts if part).strip() or user.username
+
     def get_requesting_employee(self, obj):
         user = obj.requesting_shift.employee
-        return f"{user.first_name} {user.last_name}".strip() or user.username
+        return self.build_full_name(user)
 
     def get_target_employee(self, obj):
         user = obj.target_shift.employee
-        return f"{user.first_name} {user.last_name}".strip() or user.username
+        return self.build_full_name(user)
 
     def get_requires_admin_approval(self, obj):
         return not obj.target_shift.schedule.calendar.allow_swap_without_approval
@@ -398,7 +435,7 @@ class ShiftTakeRequestSerializer(serializers.ModelSerializer):
 
 class TimeOffRequestSerializer(serializers.ModelSerializer):
     employee_name = serializers.SerializerMethodField(read_only=True)
-    calendar = serializers.PrimaryKeyRelatedField(read_only=True) 
+    calendar = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = TimeOffRequest
@@ -411,7 +448,12 @@ class TimeOffRequestSerializer(serializers.ModelSerializer):
         read_only_fields = ['employee', 'status', 'created_at', 'visible_to_others', 'rejection_reason']
 
     def get_employee_name(self, obj):
-        return obj.employee.get_full_name() or obj.employee.username
+        user = obj.employee
+        parts = [user.first_name]
+        if getattr(user, 'show_middle_name', False) and user.middle_name:
+            parts.append(user.middle_name)
+        parts.append(user.last_name)
+        return " ".join(part for part in parts if part).strip() or user.username
 
 
 class WorkplaceHolidaySerializer(serializers.ModelSerializer):
@@ -471,7 +513,11 @@ class InboxNotificationSerializer(serializers.ModelSerializer):
         if obj.sender_display:
             return obj.sender_display
         if obj.sender:
-            return f"{obj.sender.first_name} {obj.sender.last_name}".strip() or obj.sender.username
+            parts = [obj.sender.first_name]
+            if getattr(obj.sender, 'show_middle_name', False) and obj.sender.middle_name:
+                parts.append(obj.sender.middle_name)
+            parts.append(obj.sender.last_name)
+            return " ".join(p for p in parts if p).strip() or obj.sender.username
         return "Unknown"
 
 class ScheduleDetailSerializer(serializers.ModelSerializer):
@@ -510,8 +556,7 @@ class ScheduleWithConfirmationsSerializer(serializers.ModelSerializer):
         return [
             {
                 'id': sc.user.id,
-                'first_name': sc.user.first_name,
-                'last_name': sc.user.last_name,
+                'full_name': self.build_full_name(sc.user),
             }
             for sc in confirmations
         ]
@@ -522,11 +567,17 @@ class ScheduleWithConfirmationsSerializer(serializers.ModelSerializer):
         return [
             {
                 'id': m.user.id,
-                'first_name': m.user.first_name,
-                'last_name': m.user.last_name,
+                'full_name': self.build_full_name(m.user),
             }
             for m in all_members if m.user.id not in confirmed_ids
         ]
+
+    def build_full_name(self, user):
+        parts = [user.first_name]
+        if getattr(user, 'show_middle_name', False) and user.middle_name:
+            parts.append(user.middle_name)
+        parts.append(user.last_name)
+        return " ".join(part for part in parts if part).strip() or user.username
 
 class UnifiedHistorySerializer(serializers.Serializer):
     type = serializers.SerializerMethodField()
@@ -554,8 +605,8 @@ class UnifiedHistorySerializer(serializers.Serializer):
         if isinstance(obj, ShiftSwapRequest):
             return {
                 'id': obj.id,
-                'requester': obj.requested_by.get_full_name(),
-                'target_user': obj.target_shift.employee.get_full_name() if obj.target_shift else None,
+                'requester': get_full_name_custom(obj.requested_by),
+                'target_user': get_full_name_custom(obj.target_shift.employee) if obj.target_shift else None,
                 'requesting_shift_id': obj.requesting_shift.id,
                 'target_shift_id': obj.target_shift.id,
                 'approved_by_target': obj.approved_by_target,
@@ -565,8 +616,8 @@ class UnifiedHistorySerializer(serializers.Serializer):
         elif isinstance(obj, ShiftTakeRequest):
             return {
                 'id': obj.id,
-                'requester': obj.requested_by.get_full_name(),
-                'target_user': obj.requested_to.get_full_name(),
+                'requester': get_full_name_custom(obj.requested_by),
+                'target_user': get_full_name_custom(obj.requested_to),
                 'shift_id': obj.shift.id,
                 'approved_by_target': obj.approved_by_target,
                 'approved_by_admin': obj.approved_by_admin,
@@ -575,7 +626,7 @@ class UnifiedHistorySerializer(serializers.Serializer):
         elif isinstance(obj, TimeOffRequest):
             return {
                 'id': obj.id,
-                'user': obj.employee.get_full_name(),
+                'user': get_full_name_custom(obj.employee),
                 'start_date': obj.start_date,
                 'end_date': obj.end_date,
                 'reason': obj.reason,
@@ -586,11 +637,10 @@ class UnifiedHistorySerializer(serializers.Serializer):
             return {
                 'id': obj.id,
                 'message': obj.message,
-                'sender': obj.sender.get_full_name() if obj.sender else 'System',
+                'sender': get_full_name_custom(obj.sender) if obj.sender else 'System',
             }
 
         return {}
-
 class CalendarInviteSerializer(serializers.ModelSerializer):
     join_code = serializers.CharField(source='calendar.join_code', read_only=True)
 

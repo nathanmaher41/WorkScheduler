@@ -14,6 +14,9 @@ export default function ScheduleCreateModal({
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [formError, setFormError] = useState('');
+  const [isIncomplete, setIsIncomplete] = useState(false);
+
 
   useEffect(() => {
     if (!isOpen) {
@@ -30,6 +33,12 @@ export default function ScheduleCreateModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!startDate || !endDate) {
+      setIsIncomplete(true);
+      return;
+    }
+    setIsIncomplete(false);
+
     try {
       if (mode === 'edit' && existingSchedule) {
         const res = await axios.patch(`/api/schedules/${existingSchedule.id}/edit/`, {
@@ -43,14 +52,14 @@ export default function ScheduleCreateModal({
           calendar_id: calendarId,
           name,
           start_date: startDate,
-          end_date: endDate
+          end_date: endDate,
         });
         onCreate(res.data);
       }
       onClose();
     } catch (err) {
       console.error('Failed to save schedule', err);
-      alert('Something went wrong.');
+      alert('Something went wrong while saving.');
     }
   };
 
@@ -133,6 +142,9 @@ export default function ScheduleCreateModal({
               placeholderText="Select end date"
             />
           </div>
+           {formError && (
+              <p className="text-red-600 text-sm text-right">{formError}</p>
+            )}
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -141,12 +153,27 @@ export default function ScheduleCreateModal({
             >
               Cancel
             </button>
-            <button
+            {/* <button
               type="submit"
               className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
             >
               {mode === 'edit' ? 'Update' : 'Save'}
-            </button>
+            </button> */}
+            <div className="relative group">
+              <button
+                type="submit"
+                className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:bg-gray-400"
+                disabled={!startDate || !endDate}
+              >
+                {mode === 'edit' ? 'Update' : 'Save'}
+              </button>
+
+              {isIncomplete && (
+                <div className="absolute -top-10 right-0 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  Please select both a start and end date.
+                </div>
+              )}
+            </div>
           </div>
         </form>
       </div>

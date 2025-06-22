@@ -42,11 +42,11 @@ export default function HistoryPanel({ calendarId }) {
     switch (type) {
       case 'swap_request':
         return (
-          <p><strong>Swap:</strong> {data.requester} ↔ {data.target_user} (Shift #{data.shift_id}) — <em>{data.status}</em></p>
+          <p><strong>Swap:</strong> {data.requester} ↔ {data.target_user}</p>
         );
       case 'take_request':
         return (
-          <p><strong>Take:</strong> {data.requester} → {data.target_user} (Shift #{data.shift_id}) — <em>{data.status}</em></p>
+          <p><strong>Take:</strong> {data.requester} → {data.target_user}</p>
         );
       case 'time_off':
         return (

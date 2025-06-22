@@ -67,7 +67,7 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
                 >
                   ✏️ Edit Name
                 </button>
-                <button
+                {/* <button
                   onClick={() => {
                     alert('Open settings modal');
                     onToggleMenu();
@@ -75,7 +75,7 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
                   className={dropdownItemClass}
                 >
                   ⚙️ Settings
-                </button>
+                </button> */}
               </>
             )}
             {onDelete && (

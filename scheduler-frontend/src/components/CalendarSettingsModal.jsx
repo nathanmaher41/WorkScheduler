@@ -3,6 +3,7 @@ import ConfirmDeleteCalendarModal from './ConfirmDeleteCalendarModal';
 import CollapsibleSection from './CollapsibleSection';
 import axios from '../utils/axios';
 import PermissionsPanel from './PermissionsPanel';
+import ThemeToggle from '../components/ThemeToggle';
 
 
 
@@ -199,6 +200,7 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
             onChange={(e) => setNewCalendarName(e.target.value)}
             className="w-full border px-3 py-2 rounded dark:bg-gray-700 dark:text-white"
             />
+            <ThemeToggle/>
         </CollapsibleSection>
 
         <CollapsibleSection title="Your Identity">
@@ -213,7 +215,7 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
                     onClick={() => setSelectedColor(color)}
                     disabled={isUsed}
                     className={`w-6 h-6 rounded-full border-2 transition ${
-                        selectedColor === color ? 'border-white ring-2 ring-white' :
+                        selectedColor === color ? 'dark:border-white ring-2 dark:ring-white border-black ring-2 ring-black' :
                         isUsed ? 'border-red-600' : 'border-transparent'
                     }`}
                     style={{

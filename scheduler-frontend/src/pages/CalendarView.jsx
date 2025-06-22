@@ -54,6 +54,10 @@ export default function CalendarView() {
   const [effectivePermissions, setEffectivePermissions] = useState([]);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [selectedHoliday, setSelectedHoliday] = useState(null);
+  const [startDate, setStartDate] = useState(() => {
+    const stored = localStorage.getItem(`selectedScheduleDate-${id}`);
+    return stored ? new Date(stored + 'T00:00:00') : new Date();
+  });
 
 
   const navigate = useNavigate();
@@ -77,7 +81,11 @@ export default function CalendarView() {
     fetchTimeOffs();
   }, []);
 
-  
+//   useEffect(() => {
+//   if (activeSchedule?.start_date) {
+//     setDefaultDate(new Date(activeSchedule.start_date + 'T00:00:00'));
+//   }
+// }, [activeSchedule]);
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -343,6 +351,12 @@ export default function CalendarView() {
         }
 
         setActiveSchedule(initialSchedule);
+        const savedStartDate = localStorage.getItem(`selectedScheduleDate-${id}`);
+        if (savedStartDate) {
+          const date = new Date(savedStartDate + 'T00:00:00');
+          //setDefaultDate(date);
+          setCurrentDate(date);
+        }
 
         // if (schedulesRes.data.length > 0 && !activeSchedule) {
         //   const defaultSchedule = schedulesRes.data[0];
@@ -386,19 +400,31 @@ export default function CalendarView() {
     setShowShiftModal(true);
   };
 
+  // const handleScheduleSelect = (schedule) => {
+  //   localStorage.setItem(`selectedScheduleId-${id}`, schedule.id ?? 'calendar');
+  //   setActiveSchedule(schedule);
+
+  //   if (schedule.start_date) {
+  //     const newDate = new Date(`${schedule.start_date}T00:00:00`);
+  //     setCurrentDate(newDate);
+  //     if (calendarRef.current) {
+  //       const calendarApi = calendarRef.current.getApi();
+  //       calendarApi.gotoDate(newDate);
+  //     }
+  //   }
+  // };
+
   const handleScheduleSelect = (schedule) => {
     localStorage.setItem(`selectedScheduleId-${id}`, schedule.id ?? 'calendar');
+    localStorage.setItem(`selectedScheduleDate-${id}`, schedule.start_date ?? '');
+    setStartDate(new Date(schedule.start_date + 'T00:00:00'));
     setActiveSchedule(schedule);
 
-    if (schedule.start_date) {
-      const newDate = new Date(`${schedule.start_date}T00:00:00`);
-      setCurrentDate(newDate);
-      if (calendarRef.current) {
-        const calendarApi = calendarRef.current.getApi();
-        calendarApi.gotoDate(newDate);
-      }
+    if (calendarRef.current && schedule.start_date) {
+      calendarRef.current.getApi().gotoDate(schedule.start_date + 'T00:00:00');
     }
   };
+
 
   const isOutOfRange = (date) => {
     if (!activeSchedule) return false;
@@ -492,6 +518,11 @@ export default function CalendarView() {
       setSchedules(prev => prev.filter(s => s.id !== schedule.id));
       if (activeSchedule?.id === schedule.id) {
         setActiveSchedule(null);
+      }
+      if (activeSchedule?.id === schedule.id) {
+          setActiveSchedule(null);
+          localStorage.removeItem(`selectedScheduleDate-${id}`);
+          localStorage.removeItem(`selectedScheduleId-${id}`);
       }
     } catch (err) {
       console.error("Failed to delete schedule", err);
@@ -653,7 +684,7 @@ export default function CalendarView() {
             }}
             events={events}
             dateClick={handleDateClick}
-            initialDate={currentDate}
+            initialDate={startDate}
             height={700}
             eventDisplay="block"
             slotEventOverlap={false}

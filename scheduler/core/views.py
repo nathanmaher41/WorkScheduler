@@ -2088,13 +2088,14 @@ class TimeOffRejectView(APIView):
 
         email_body += "\nPlease log in to view more details."
 
-        send_mail(
-            subject,
-            email_body,
-            'schedulounge@gmail.com',
-            [timeoff.employee.email],
-            fail_silently=True
-        )
+        if timeoff.employee.notify_email and timeoff.employee.email:
+            send_mail(
+                subject,
+                email_body,
+                'schedulounge@gmail.com',
+                [timeoff.employee.email],
+                fail_silently=True
+            )
 
         return Response({'success': 'Time off rejected.'}, status=200)
 

@@ -53,53 +53,53 @@ export default function TimeOffRequestsPanel({ calendarId }) {
   if (loading) return <p>Loading time off requests...</p>;
 
   return (
-    <div>
-      <h2 className="text-lg font-semibold mb-4">📝 Pending Time Off Requests</h2>
-      {requests.length === 0 ? (
-        <p>No pending time off requests.</p>
-      ) : (
-        requests.map((r) => {
+    <div className="flex flex-col max-h-[600px]">
+    <h2 className="text-lg font-semibold mb-4">📝 Pending Time Off Requests</h2>
+    {requests.length === 0 ? (
+      <p>No pending time off requests.</p>
+    ) : (
+      <div className="overflow-y-auto space-y-3 pr-1">
+        {requests.map((r) => {
           const isApproving = approvingId === r.id;
           const isRejecting = rejectingId === r.id;
 
           return (
-            <div key={r.id} className="border p-4 rounded mb-3">
+            <div key={r.id} className="border p-4 rounded">
               <p><strong>{r.employee_name}</strong> requested time off</p>
-              <p>
-                {r.start_date} to {r.end_date}
-              </p>
+              <p>{r.start_date} to {r.end_date}</p>
               {r.reason && <p className="italic text-sm mt-1">Reason: {r.reason}</p>}
               <div className="mt-2 flex gap-2">
                 {(isApproving || isRejecting) ? (
+                  <button
+                    disabled
+                    className={`${
+                      isApproving ? 'bg-green-400' : 'bg-red-400'
+                    } text-white px-3 py-1 rounded w-full`}
+                  >
+                    {isApproving ? 'Accepting...' : 'Rejecting...'}
+                  </button>
+                ) : (
+                  <>
                     <button
-                        disabled
-                        className={`${
-                        isApproving ? 'bg-green-400' : 'bg-red-400'
-                        } text-white px-3 py-1 rounded w-full`}
+                      onClick={() => handleApprove(r.id)}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
                     >
-                        {isApproving ? 'Accepting...' : 'Rejecting...'}
+                      Approve
                     </button>
-                    ) : (
-                    <>
-                        <button
-                        onClick={() => handleApprove(r.id)}
-                        className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
-                        >
-                        Approve
-                        </button>
-                        <button
-                        onClick={() => handleReject(r.id)}
-                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                        >
-                        Reject
-                        </button>
-                    </>
-                    )}
+                    <button
+                      onClick={() => handleReject(r.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                    >
+                      Reject
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           );
-        })
-      )}
-    </div>
-  );
+        })}
+      </div>
+    )}
+  </div>
+);
 }

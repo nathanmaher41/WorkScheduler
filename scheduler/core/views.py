@@ -276,12 +276,24 @@ class ScheduleListView(generics.ListAPIView):
         user = self.request.user
         calendar_id = self.request.query_params.get("calendar_id")
 
-        queryset = Schedule.objects.filter(schedulemembership__user=user)
+        if not calendar_id:
+            return Schedule.objects.none()
 
-        if calendar_id:
-            queryset = queryset.filter(calendar_id=calendar_id)
+        # Ensure the user is in this calendar
+        is_calendar_member = CalendarMembership.objects.filter(
+            user=user,
+            calendar_id=calendar_id
+        ).exists()
 
-        return queryset
+        if not is_calendar_member:
+            return Schedule.objects.none()
+
+        # Return schedules for this calendar where the user is a member OR the schedule is default calendar-wide
+        return Schedule.objects.filter(
+            calendar_id=calendar_id
+        ).filter(
+            models.Q(schedulemembership__user=user)
+        ).distinct()
 
 class ScheduleInviteView(generics.GenericAPIView):
     serializer_class = ScheduleInviteSerializer
@@ -314,7 +326,17 @@ class ShiftCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         schedule = self.get_object()
-        serializer.save(schedule=schedule)
+        shift = serializer.save(schedule=schedule)
+
+        # Ensure the employee is added as a ScheduleMember
+        ScheduleMembership.objects.get_or_create(
+            schedule=schedule,
+            user=shift.employee,
+            defaults={'role': 'employee'}
+        )
+        print("✅ Created shift for:", shift.employee)
+        print("🧾 Membership exists?", ScheduleMembership.objects.filter(schedule=schedule, user=shift.employee).exists())
+
 
     def post(self, request, *args, **kwargs):
         print("RAW POST DATA:", request.data)
@@ -325,7 +347,8 @@ class ShiftCreateView(generics.CreateAPIView):
             print("SHIFT CREATE ERROR:", serializer.errors) 
             return Response(serializer.errors, status=400)
         
-        serializer.save(schedule=schedule)
+        #serializer.save(schedule=schedule)
+        self.perform_create(serializer)
         return Response(serializer.data, status=201)
 
 class ShiftListView(generics.ListAPIView):

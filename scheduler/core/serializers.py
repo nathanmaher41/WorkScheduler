@@ -31,11 +31,14 @@ def build_full_name(self, user):
     return " ".join(part for part in parts if part).strip() or user.username
 
 def get_full_name_custom(user):
+    if not user:
+        return "Unknown"
     parts = [user.first_name]
-    if getattr(user, 'show_middle_name', False) and user.middle_name:
+    if hasattr(user, 'middle_name') and user.middle_name:
         parts.append(user.middle_name)
     parts.append(user.last_name)
-    return " ".join(part for part in parts if part).strip()
+    full_name = " ".join(p for p in parts if p).strip()
+    return full_name or user.username or "Unknown"
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -605,8 +608,8 @@ class UnifiedHistorySerializer(serializers.Serializer):
         if isinstance(obj, ShiftSwapRequest):
             return {
                 'id': obj.id,
-                'requester': get_full_name_custom(obj.requested_by),
-                'target_user': get_full_name_custom(obj.target_shift.employee) if obj.target_shift else None,
+                'requester': get_full_name_custom(obj.requesting_original_employee),
+                'target_user': get_full_name_custom(obj.target_original_employee),
                 'requesting_shift_id': obj.requesting_shift.id,
                 'target_shift_id': obj.target_shift.id,
                 'approved_by_target': obj.approved_by_target,

@@ -411,11 +411,13 @@ class ShiftSwapRequestView(APIView):
         if requesting_shift.schedule != target_shift.schedule:
             return Response({"error": "Shifts must be in the same schedule."}, status=400)
 
-        # Create new swap request
+        # Create new swap request with original employees
         swap_request = ShiftSwapRequest.objects.create(
             requesting_shift=requesting_shift,
             target_shift=target_shift,
-            requested_by=request.user
+            requested_by=request.user,
+            requesting_original_employee=requesting_shift.employee,
+            target_original_employee=target_shift.employee,
         )
 
         # Notify the target employee

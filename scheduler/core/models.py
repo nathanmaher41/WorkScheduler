@@ -13,7 +13,7 @@ class User(AbstractUser):
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     pronouns = models.CharField(max_length=50, blank=True, null=True)
     show_pronouns = models.BooleanField(default=True)
-    show_middle_name = models.BooleanField(default=True)
+    show_middle_name = models.BooleanField(default=False)
     notify_email = models.BooleanField(default=True)
     notify_sms = models.BooleanField(default=False)
     email = models.EmailField(unique=True)
@@ -161,6 +161,12 @@ class ShiftSwapRequest(models.Model):
     approved_by_admin = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
+    requesting_original_employee = models.ForeignKey(
+        User, related_name='+', null=True, blank=True, on_delete=models.SET_NULL
+    )
+    target_original_employee = models.ForeignKey(
+        User, related_name='+', null=True, blank=True, on_delete=models.SET_NULL
+    )
 
     def __str__(self):
         return f"{self.requested_by.username} requests {self.target_shift} in exchange for {self.requesting_shift}"

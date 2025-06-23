@@ -11,7 +11,7 @@ export default function HolidayModal({
     onUpdateHoliday,
     onDeleteHoliday,
     }) {
-    const canEdit = isAdmin || effectivePermissions.includes('manage_holidays');
+    const canEdit = isAdmin || effectivePermissions.some(p => p.codename === 'manage_holidays');;
     const [editing, setEditing] = useState(false);
 
     if (!isOpen || !holiday) return null;

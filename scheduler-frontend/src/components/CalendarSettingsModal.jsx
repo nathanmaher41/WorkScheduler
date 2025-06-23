@@ -7,7 +7,7 @@ import ThemeToggle from '../components/ThemeToggle';
 
 
 
-export default function CalendarSettingsModal({ isOpen, onClose, calendar, members, currentUserId, roles = [], onRename, onUpdateColor, onUpdateRole, onUpdateSettings, currentMember }) {
+export default function CalendarSettingsModal({ isOpen, onClose, calendar, members, currentUserId, roles = [], onRename, onUpdateColor, onUpdateRole, onUpdateSettings, currentMember, effectivePermissions }) {
     if (!isOpen) return null;
 
     const [newRoleName, setNewRoleName] = useState('');
@@ -24,12 +24,14 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
     const [permissionMode, setPermissionMode] = useState('Members');
     const [selectedTargetId, setSelectedTargetId] = useState('');
     const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
+    const [copied, setCopied] = useState(false);
+
     const [permissionMap, setPermissionMap] = useState({
     Members: {},
     Roles: {},
     });
     
-
+    console.log("BUENOS TARDES",effectivePermissions);
     const togglePermission = (type, id, key) => {
     setPermissionMap((prev) => ({
         ...prev,
@@ -153,7 +155,7 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
 
     const usedColors = new Set(members.map(m => m.color).filter(Boolean));
     const [selectedColor, setSelectedColor] = useState(
-    members.find(m => m.id === currentUserId)?.color || ''
+    members.find(m => m.user_id === currentUserId)?.color || ''
     );
 
     // const currentMember = members.find(m => m.id === currentUserId);
@@ -166,6 +168,16 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
         setSelectedRoleId(currentMember.title_id);
     }
     }, [currentMember]);
+
+
+    // useEffect(() => {
+    //     console.log(currentMember);
+    //     //console.log(currentMember.title);
+    //     if (isOpen && currentMember?.title_id) {
+    //         setSelectedRoleId(currentMember.title_id);
+    //     }
+    // }, [isOpen, currentMember?.title_id]);
+
 
     
 
@@ -193,15 +205,44 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
         <h2 className="text-2xl font-bold mb-4 text-black dark:text-white">Calendar Settings</h2>
 
         <CollapsibleSection title="General">
-            <label className="block text-sm font-medium text-black dark:text-white mb-1">Calendar Name</label>
-            <input
-            type="text"
-            value={newCalendarName}
-            onChange={(e) => setNewCalendarName(e.target.value)}
-            className="w-full border px-3 py-2 rounded dark:bg-gray-700 dark:text-white"
-            />
-            <ThemeToggle/>
-        </CollapsibleSection>
+            {(currentMember?.is_admin || effectivePermissions.some(p => p.codename === 'manage_calendar_settings')) ? (
+                <>
+                    <label className="block text-sm font-medium text-black dark:text-white mb-1">Calendar Name</label>
+                    <input
+                    type="text"
+                    value={newCalendarName}
+                    onChange={(e) => setNewCalendarName(e.target.value)}
+                    className="w-full border px-3 py-2 rounded dark:bg-gray-700 dark:text-white"
+                    />
+                </>
+                ) : (
+                <>
+                    <label className="block text-sm font-medium text-black dark:text-white mb-1">Calendar Name</label>
+                    <div className="w-full border px-3 py-2 rounded bg-gray-100 dark:bg-gray-700 text-black dark:text-white">
+                    {calendar.name}
+                    </div>
+                </>
+                )}
+
+            <div className="mt-4">
+                <label className="block text-sm font-medium text-black dark:text-white mb-1">Join Code</label>
+                <div
+                onClick={() => {
+                    navigator.clipboard.writeText(calendar.join_code);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                }}
+                className="cursor-pointer border px-3 py-2 rounded bg-gray-100 dark:bg-gray-700 text-black dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600 transition select-none"
+                >
+                {copied ? 'Copied!' : calendar.join_code}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Click to copy</p>
+            </div>
+
+            <div className="mt-4">
+                <ThemeToggle />
+            </div>
+            </CollapsibleSection>
 
         <CollapsibleSection title="Your Identity">
             <label className="block text-sm font-medium text-black dark:text-white mb-1">Your Display Color</label>
@@ -247,17 +288,19 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
             </select>
         </CollapsibleSection>
 
-        <CollapsibleSection title="Danger Zone" defaultOpen={false}>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-            Deleting the calendar will remove it for all members and delete all associated data.
-            </p>
-            <button
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-            onClick={() => setShowConfirmDelete(true)}
-            >
-            Delete Calendar
-            </button>
-        </CollapsibleSection>
+        {currentMember?.is_admin && (
+            <CollapsibleSection title="Danger Zone" defaultOpen={false}>
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                Deleting the calendar will remove it for all members and delete all associated data.
+                </p>
+                <button
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                onClick={() => setShowConfirmDelete(true)}
+                >
+                Delete Calendar
+                </button>
+            </CollapsibleSection>
+            )}
 
         <div className="flex justify-end gap-2 mt-4">
             <button onClick={onClose} className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-black dark:text-white rounded">
@@ -266,13 +309,20 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
             <button
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             onClick={async () => {
-                await handleApplyChanges();
-                try {
+            await handleApplyChanges();
+
+            const canRenameCalendar =
+                currentMember?.is_admin ||
+                effectivePermissions?.some(p => p.codename === 'manage_calendar_settings');
+
+            try {
+                if (canRenameCalendar && newCalendarName !== calendar.name) {
                 await onRename(calendar.id, newCalendarName);
-                onClose();
-                } catch (err) {
-                alert('Error updating calendar name');
                 }
+                onClose();
+            } catch (err) {
+                alert('Error updating calendar name');
+            }
             }}
             >
             Save Changes

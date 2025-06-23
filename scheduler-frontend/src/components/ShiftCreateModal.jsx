@@ -83,7 +83,7 @@ export default function ShiftCreateModal({
   const handleEmployeeChange = (e) => {
     const employeeId = e.target.value;
     setEmployee(employeeId);
-    const selected = members.find((m) => m.id === parseInt(employeeId));
+    const selected = members.find((m) => m.user_id === parseInt(employeeId));
     if (selected) {
       setRole(selected.role || '');
     }
@@ -151,7 +151,8 @@ export default function ShiftCreateModal({
         return;
       }
 
-      const [year, month, day] = selectedDate.split('-').map(Number);
+      //const [year, month, day] = selectedDate.split('-').map(Number);
+      const [year, month, day] = new Date(selectedDate).toISOString().split('T')[0].split('-').map(Number);
       const start = new Date(year, month - 1, day); 
       if (isNaN(start.getTime())) {
         throw new RangeError('Invalid start date');
@@ -264,11 +265,11 @@ export default function ShiftCreateModal({
             >
               <option value="">Select...</option>
               {members.filter(m => {
-                if (!m || !m.id) return false;
-                console.log('Checking member:', m.id, 'against time off:', timeOffRequests);
+                if (!m || !m.user_id) return false;
+                console.log('Checking member:', m.user_id, 'against time off:', timeOffRequests);
                 const getDayStr = (date) => date.toISOString().split('T')[0];
                 const isOff = timeOffRequests.some(req => {
-                  if (req.employee !== m.id) return false;
+                  if (req.employee !== m.user_id) return false;
                   if ((req.status || '').toLowerCase() !== 'approved') return false;
                   const selected = new Date(selectedDate);
                   const start = new Date(req.start_date);
@@ -278,7 +279,7 @@ export default function ShiftCreateModal({
                 });
                 return !isOff;
               }).map((member) => (
-                <option key={`emp-${member.id}`} value={member.id}>
+                <option key={`emp-${member.user_id}`} value={member.user_id}>
                   {member.full_name || member.username}
                 </option>
               ))}

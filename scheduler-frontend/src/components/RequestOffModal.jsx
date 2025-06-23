@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import DatePicker from 'react-datepicker';
 
-export default function RequestOffModal({ isOpen, onClose, calendarId, selectedDate, onRequestSubmitted, isAdmin }) {
+export default function RequestOffModal({ isOpen, onClose, calendarId, selectedDate, onRequestSubmitted, isAdmin, effectivePermissions }) {
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
@@ -159,7 +159,7 @@ export default function RequestOffModal({ isOpen, onClose, calendarId, selectedD
           {isHolidayMode ? 'Set Workplace Holiday' : 'Request Time Off'}
         </h2>
 
-        {isAdmin && (
+        {(isAdmin || effectivePermissions.some(p => p.codename === 'manage_holidays'))&& (
           <button
             className="w-full mb-4 px-4 py-2 rounded font-medium bg-purple-500 text-white hover:bg-purple-700"
             onClick={() => setIsHolidayMode(prev => !prev)}

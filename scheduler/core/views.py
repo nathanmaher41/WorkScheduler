@@ -319,7 +319,7 @@ class ScheduleMemberListView(generics.ListAPIView):
 
 class ShiftCreateView(generics.CreateAPIView):
     serializer_class = ShiftSerializer
-    permission_classes = [permissions.IsAuthenticated, IsScheduleAdmin]
+    permission_classes = [IsAuthenticated, HasCalendarPermissionOrAdmin('create_edit_delete_shifts')]
 
     def get_object(self):
         return Schedule.objects.get(id=self.kwargs['schedule_id'])
@@ -337,17 +337,15 @@ class ShiftCreateView(generics.CreateAPIView):
         print("✅ Created shift for:", shift.employee)
         print("🧾 Membership exists?", ScheduleMembership.objects.filter(schedule=schedule, user=shift.employee).exists())
 
-
     def post(self, request, *args, **kwargs):
         print("RAW POST DATA:", request.data)
         schedule = self.get_object()
         serializer = self.get_serializer(data=request.data)
-        
+
         if not serializer.is_valid():
-            print("SHIFT CREATE ERROR:", serializer.errors) 
+            print("SHIFT CREATE ERROR:", serializer.errors)
             return Response(serializer.errors, status=400)
-        
-        #serializer.save(schedule=schedule)
+
         self.perform_create(serializer)
         return Response(serializer.data, status=201)
 
@@ -518,7 +516,7 @@ class ShiftSwapRejectView(APIView):
 
         calendar = swap.target_shift.schedule.calendar
         is_target = swap.target_shift.employee == request.user
-        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests").has_permission(request, self)
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests")().has_permission(request, self)
 
         if not (is_target or has_perm):
             return Response({"error": "You are not authorized to reject this swap."}, status=403)
@@ -1098,7 +1096,8 @@ class ShiftSwapAcceptView(APIView):
         is_target = swap.target_shift.employee == request.user
         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
         self.calendar = calendar  # for permission class
-        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests")(request, self)
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests")().has_permission(request, self)
+
 
         logger.debug(f"Calendar={calendar.name} | is_target={is_target} | is_admin={is_admin} | has_perm={has_perm}")
 
@@ -1319,7 +1318,7 @@ class ShiftTakeAcceptView(APIView):
         is_target = take.requested_to == request.user
         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
         self.calendar = calendar  # for HasCalendarPermissionOrAdmin
-        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests")(request, self)
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests")().has_permission(request, self)
 
 
         if not (is_target or is_admin or has_perm):
@@ -1392,7 +1391,7 @@ class ShiftTakeRejectView(APIView):
         is_target = take.requested_to == request.user
         is_admin = CalendarMembership.objects.filter(calendar=calendar, user=request.user, is_admin=True).exists()
         self.calendar = calendar
-        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests")(request, self)
+        has_perm = HasCalendarPermissionOrAdmin("approve_reject_swap_requests")().has_permission(request, self)
 
 
         if not (is_target or is_admin or has_perm):
@@ -2147,7 +2146,7 @@ class CalendarMemberDeleteView(APIView):
 
 
 class AnnouncementCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasCalendarPermissionOrAdmin('send_announcements')]
 
     def post(self, request, calendar_id):
         message = request.data.get('message')
@@ -2155,6 +2154,9 @@ class AnnouncementCreateView(APIView):
 
         if not message:
             return Response({'error': 'Message is required'}, status=400)
+
+        sender_name = sender_display or request.user.get_full_name()
+        subject = f"📣 New Announcement from {sender_name}"
 
         members = CalendarMembership.objects.filter(calendar_id=calendar_id).select_related('user')
 
@@ -2170,6 +2172,19 @@ class AnnouncementCreateView(APIView):
             for member in members
         ]
         InboxNotification.objects.bulk_create(notifications)
+
+        for member in members:
+            user = member.user
+            if user.notify_email and user.email:
+                body = (
+                    f"Hi {user.first_name},\n\n"
+                    f"You have a new announcement in your calendar:\n\n"
+                    f"{message}\n\n"
+                    f"— {sender_name}\n\n"
+                    f"Visit your calendar to view more.\n\n"
+                    f"Thanks,\nScheduLounge"
+                )
+                send_notification_email(subject, body, user.email)
 
         return Response({'message': 'Announcement sent!'})
 

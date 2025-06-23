@@ -14,29 +14,40 @@ class IsScheduleAdmin(permissions.BasePermission):
             role='admin'
         ).exists()
 
-class HasCalendarPermissionOrAdmin(BasePermission):
-    def __init__(self, required_perm):
-        self.required_perm = required_perm
+def HasCalendarPermissionOrAdmin(required_perm):
+    class _HasCalendarPermissionOrAdmin(BasePermission):
+        def has_permission(self, request, view):
+            user = request.user
+            if not user.is_authenticated:
+                return False
 
-    def has_permission(self, request, view):
-        print(f"🔍 Running has_permission with required: {self.required_perm}")
-        # Try getting calendar_id from view.kwargs or fallback to request.parser_context
-        calendar_id = (
-            getattr(view, 'kwargs', {}).get('calendar_id')
-            or getattr(getattr(request, 'parser_context', {}), 'kwargs', {}).get('calendar_id')
-        )
+            # Try getting calendar_id from view.kwargs
+            calendar_id = getattr(view, 'kwargs', {}).get('calendar_id')
 
-        user = request.user
-        if not user.is_authenticated or not calendar_id:
-            return False
+            # Fallback: derive from schedule_id if present
+            if not calendar_id:
+                schedule_id = getattr(view, 'kwargs', {}).get('schedule_id')
+                if schedule_id:
+                    from core.models import Schedule  # or your actual path
+                    try:
+                        calendar_id = Schedule.objects.get(id=schedule_id).calendar_id
+                    except Schedule.DoesNotExist:
+                        return False
 
-        try:
-            membership = CalendarMembership.objects.get(user=user, calendar_id=calendar_id)
-        except CalendarMembership.DoesNotExist:
-            return False
+            if not calendar_id:
+                return False
 
-        print(f"✅ Found membership for {user.username}. Is admin: {membership.is_admin}. Effective perms: {membership.get_effective_permissions()}")
-        return membership.is_admin or any(p.codename == self.required_perm for p in membership.get_effective_permissions())
+            try:
+                membership = CalendarMembership.objects.get(user=user, calendar_id=calendar_id)
+            except CalendarMembership.DoesNotExist:
+                return False
+
+            return (
+                membership.is_admin or
+                any(p.codename == required_perm for p in membership.get_effective_permissions())
+            )
+    return _HasCalendarPermissionOrAdmin
+
 
     # def __call__(self):
     #     return self

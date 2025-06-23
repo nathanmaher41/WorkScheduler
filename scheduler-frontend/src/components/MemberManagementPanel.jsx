@@ -1,6 +1,7 @@
 // src/components/MembershipManagementPanel.jsx
 import { useEffect, useState } from 'react';
 import axios from '../utils/axios';
+import ShareInviteModal from './ShareInviteModal';
 
 export default function MembershipManagementPanel({
   calendarId,

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import ShiftCreateModal from './ShiftCreateModal';
 
-export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete, isAdmin, timeOffRequests, calendarId }) {
+export default function ShiftSwapModal({ isOpen, onClose, shift, currentUserId, members, onSwapComplete, isAdmin, timeOffRequests, calendarId, effectivePermissions }) {
   const [yourShifts, setYourShifts] = useState([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [memberShifts, setMemberShifts] = useState([]);
@@ -331,7 +331,7 @@ console.log("🔍 yourShifts:", yourShifts);
       .map(req => req.requested_to_id)
   );
 
-  const member = members.find(m => m.id === shift.employee);
+  const member = members.find(m => m.user_id === shift.employee);
   console.log("🧠 Member object for shift:", member);
 
 
@@ -370,7 +370,7 @@ console.log("🔍 yourShifts:", yourShifts);
       <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-full max-w-md max-h-screen overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-black dark:text-white">Shift Details</h2>
-          {isAdmin && (
+          {(isAdmin || effectivePermissions.some(p => p.codename === 'create_edit_delete_shifts')) && (
             <button
               onClick={() => setIsEditing(true)}
               className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
@@ -422,9 +422,9 @@ console.log("🔍 yourShifts:", yourShifts);
                   >
                     <option value="">-- Select a Member --</option>
                     {members
-                      .filter(m => m.id !== currentUserId && !offMemberIds.includes(m.id))
+                      .filter(m => m.user_id !== currentUserId && !offMemberIds.includes(m.user_id))
                       .map(member => (
-                      <option key={member.id} value={member.id}>{member.full_name}</option>
+                      <option key={member.user_id} value={member.user_id}>{member.full_name}</option>
                     ))}
                   </select>
                 </div>
@@ -480,7 +480,7 @@ console.log("🔍 yourShifts:", yourShifts);
                   {members
                     .filter(m => m.id !== currentUserId && !offMemberIds.includes(m.id))
                     .map(member => (
-                    <option key={member.id} value={member.id} disabled={usedGiveRequestUserIds.has(member.id)}>{member.full_name}</option>
+                    <option key={member.user_id} value={member.user_id} disabled={usedGiveRequestUserIds.has(member.user_id)}>{member.full_name}</option>
                   ))}
                 </select>
                 <button className="mt-2 px-3 py-1 bg-purple-600 text-white rounded" onClick={() => handleRequestTake('give')} disabled={!selectedMemberId || usedGiveRequestUserIds.has(Number(selectedMemberId))}>Request Take</button>

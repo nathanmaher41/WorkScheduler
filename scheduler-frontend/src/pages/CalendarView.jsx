@@ -128,6 +128,7 @@ export default function CalendarView() {
         };
       });
 
+
       const userId = currentUserRes.data.id;
       setCurrentUserId(userId);
 
@@ -302,11 +303,13 @@ export default function CalendarView() {
       console.log("here1");
       if (!currentMember) return;
       setCurrentMember(currentMember);
+      console.log(currentMember);
       console.log("here2");
       try {
         const res = await axios.get(`/api/calendars/${id}/members/${currentMember.id}/effective-permissions/`);
         console.log(res.data);
         setEffectivePermissions(res.data.permissions); // ✅ use "permissions" wrapper
+        console.log("PERMS",res.data.permissions)
       } catch (err) {
         console.error('Failed to fetch effective permissions:', err);
       }
@@ -402,7 +405,12 @@ export default function CalendarView() {
       setShowRequestOffModal(true);
       return;
     }
-    if (!isCalendarAdmin || !activeSchedule) return;
+    const canCreateShift =
+    isCalendarAdmin ||
+    effectivePermissions.some(p => p.codename === 'create_edit_delete_shifts');
+
+    if (!canCreateShift) return;
+
     setSelectedDate(localStr);
     setShowShiftModal(true);
   };
@@ -477,10 +485,8 @@ export default function CalendarView() {
 
     if (type === 'holiday') {
       const holiday = info.event.extendedProps.holidayData;
-      if (isCalendarAdmin || effectivePermissions.includes('manage_holidays')) {
         setSelectedHoliday(holiday);
         setShowHolidayModal(true);
-      }
       return;
     }
 
@@ -603,7 +609,7 @@ export default function CalendarView() {
 
       setMembers(prev =>
         prev.map(m =>
-          m.id === memberId ? { ...m, color: newColor } : m
+          m.user_id === memberId ? { ...m, color: newColor } : m
         )
       );
 
@@ -623,7 +629,7 @@ export default function CalendarView() {
 
       setMembers(prev =>
         prev.map(m =>
-          m.id === memberId ? { ...m, title_id: titleId } : m
+          m.user_id === memberId ? { ...m, title_id: titleId } : m
         )
       );
       await refreshShifts();
@@ -790,6 +796,7 @@ export default function CalendarView() {
               onSwapComplete={refreshShifts}
               isAdmin={isCalendarAdmin}
               timeOffRequests={filteredTimeOffs}
+              effectivePermissions={effectivePermissions}
             />
           )}
         </div>
@@ -839,7 +846,7 @@ export default function CalendarView() {
         {/* Scrollable schedules */}
         <div className="mb-4">
           <h2 className="text-lg font-bold mb-2">Schedules</h2>
-          {isCalendarAdmin && (
+          {(isCalendarAdmin || effectivePermissions.some(p => p.codename === 'create_edit_delete_schedules'))&& (
             <button
               className="w-full bg-purple-500 dark:bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 dark:hover:bg-purple-500"
               onClick={() => setShowScheduleModal(true)}
@@ -916,6 +923,7 @@ export default function CalendarView() {
           onClose={() => setShowRequestOffModal(false)}
           calendarId={id}
           isAdmin={isCalendarAdmin}
+          effectivePermissions={effectivePermissions}
           onRequestSubmitted={async (updatedHolidays = null) => {
           const timeOffRes = await axios.get(`/api/calendars/${id}/timeoff/`);
             setTimeOffRequests(timeOffRes.data);
@@ -959,7 +967,8 @@ export default function CalendarView() {
           onUpdateColor={handleUpdateColor}
           onUpdateRole={handleUpdateRole}
           onUpdateSettings={handleUpdateSettings}
-          currentMember={members.find((m) => m.id === currentUserId)}
+          effectivePermissions={effectivePermissions}
+          currentMember={members.find((m) => m.user_id === currentUserId)}
         />
       )}
       <HolidayModal

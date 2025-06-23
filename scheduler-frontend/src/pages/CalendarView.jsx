@@ -54,6 +54,8 @@ export default function CalendarView() {
   const [effectivePermissions, setEffectivePermissions] = useState([]);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [selectedHoliday, setSelectedHoliday] = useState(null);
+  const [currentMember, setCurrentMember] = useState(null);
+
   const [startDate, setStartDate] = useState(() => {
     const stored = localStorage.getItem(`selectedScheduleDate-${id}`);
     return stored ? new Date(stored + 'T00:00:00') : new Date();
@@ -61,7 +63,7 @@ export default function CalendarView() {
 
 
   const navigate = useNavigate();
-
+  console.log(isCalendarAdmin);
   useEffect(() => {
     // if (activeSchedule?.id) {
       refreshShifts(activeSchedule);
@@ -199,10 +201,9 @@ export default function CalendarView() {
               )
               .map((req) => {
                 const memberColor =
-                  req.color ||
-                  members.find((m) => m.id === req.employee)?.color ||
-                  '#8b5cf6';
-
+                    req.color ||
+                    members.find((m) => m.user_id === req.employee)?.color ||
+                    '#8b5cf6';
                 const isPending = req.status === 'pending' && req.employee === currentUserId;
 
                 return {
@@ -297,11 +298,14 @@ export default function CalendarView() {
 
   useEffect(() => {
     const fetchEffectivePermissions = async () => {
-      const currentMember = members.find((m) => m.user === currentUserId); // ✅ not m.id
+      const currentMember = members.find((m) => m.user_id === currentUserId); // ✅ not m.id
+      console.log("here1");
       if (!currentMember) return;
-
+      setCurrentMember(currentMember);
+      console.log("here2");
       try {
         const res = await axios.get(`/api/calendars/${id}/members/${currentMember.id}/effective-permissions/`);
+        console.log(res.data);
         setEffectivePermissions(res.data.permissions); // ✅ use "permissions" wrapper
       } catch (err) {
         console.error('Failed to fetch effective permissions:', err);
@@ -327,6 +331,7 @@ export default function CalendarView() {
         setCalendarRoles(calendarRes.data.roles || []);
         setCalendarName(calendarRes.data.name);
         setMembers(membersRes.data);
+        console.log("BRUH", membersRes.data);
         setCalendar(calendarRes.data);
         const defaultSchedule = {
           id: null,
@@ -373,7 +378,9 @@ export default function CalendarView() {
         // }
 
         const currentUserId = userRes.data.id;
-        const currentMember = membersRes.data.find((m) => m.id === currentUserId);
+        const currentMember = membersRes.data.find((m) => m.user_id === currentUserId);
+        console.log("Current user ID:", currentUserId);
+        console.log("Resolved current member:", currentMember);
         setIsCalendarAdmin(currentMember?.is_admin || false);
       } catch (err) {
         console.error('Error loading calendar data:', err);
@@ -553,6 +560,21 @@ export default function CalendarView() {
     }
   };
 
+    const adminPanelPermissions = [
+    'invite_remove_members',
+    'assign_roles',
+    'create_edit_delete_schedules',
+    'approve_reject_swap_requests',
+    'approve_reject_take_requests',
+    'approve_reject_time_off',
+    'manage_roles',
+    'promote_demote_admins',
+    'send_announcements',
+  ];
+  const userCanAccessAdminPanel = currentMember?.is_admin || effectivePermissions.some(p =>
+    adminPanelPermissions.includes(p.codename)
+  );
+
 
   const handleCalendarRename = async (calendarId, newName) => {
     try {
@@ -662,7 +684,7 @@ export default function CalendarView() {
               )}
             </button>
             <button className="bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600" onClick={() => setShowSettingsModal(true)}><SettingsIcon/></button>
-            {isCalendarAdmin && (
+            {userCanAccessAdminPanel && (
             <button
               className="bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-4 py-2 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-600"
               onClick={() => navigate(`/calendar/${id}/admin`)}

@@ -13,19 +13,8 @@ import ScheduleManagementPanel from '../components/ScheduleManagementPanel';
 import HistoryPanel from '../components/HistoryPanel';
 
 
-const tabs = [
-  { key: 'members', label: 'Member Management' },
-  { key: 'roles', label: 'Role Management' },
-  { key: 'permissions', label: 'Permissions and Rules'},
-  { key: 'schedule', label: 'Schedule Management' },
-  { key: 'timeoff', label: 'Time Off Requests' },
-  { key: 'swaps', label: 'Swaps & Takes' },
-  { key: 'announcements', label: 'Announcements' },
-  { key: 'history', label: 'History Log' },
-];
-
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('inbox');
+  //xconst [activeTab, setActiveTab] = useState(null);
   const { id: calendarId } = useParams();
   const navigate = useNavigate();
   const [calendarRoles, setCalendarRoles] = useState([]);
@@ -35,10 +24,75 @@ export default function AdminPanel() {
   const [allPermissions, setAllPermissions] = useState([]);
   const [currentUserId, setCurrentUserId] = useState([]);
   const [memberPermissions, setMemberPermissions] = useState([]);
+  const [currentMember, setCurrentMember] = useState(null);
+
 
   // const location = useLocation();
   // const { state } = location;
   // const passedRoles = state?.roles || [];
+
+  const tabs = [
+  {
+    key: 'members',
+    label: '👥 Members',
+    permissionCheck: () =>
+      userHasPermission('invite_remove_members') || userHasPermission('assign_roles'),
+  },
+  {
+    key: 'schedule',
+    label: '📅 Schedule Management',
+    permission: 'create_edit_delete_schedules',
+  },
+  {
+    key: 'swaps',
+    label: '🔁 Swaps & Takes',
+    permissionCheck: () =>
+      userHasPermission('approve_reject_swap_requests') || userHasPermission('approve_reject_take_requests'),
+  },
+  {
+    key: 'timeoff',
+    label: '🛌 Time Off Requests',
+    permission: 'approve_reject_time_off',
+  },
+  {
+    key: 'roles',
+    label: '🏷️ Roles',
+    permission: 'manage_roles',
+  },
+  {
+    key: 'permissions',
+    label: '🔐 Permissions',
+    permission: 'promote_demote_admins',
+  },
+  {
+    key: 'announcements',
+    label: '📣 Announcements',
+    permission: 'send_announcements',
+  },
+  {
+    key: 'history',
+    label: '📜 History',
+    permissionCheck: () => currentMember?.is_admin,
+  },
+];
+
+
+  function userHasPermission(perm) {
+    if (!perm || currentMember?.is_admin) return true;
+    return Array.isArray(memberPermissions) && memberPermissions.some(p => p.codename === perm);
+  }
+
+  const userAllowedTabs = tabs.filter(t =>
+    t.permissionCheck ? t.permissionCheck() : userHasPermission(t.permission)
+  );
+
+  const [activeTab, setActiveTab] = useState(null);
+
+  useEffect(() => {
+    if (userAllowedTabs.length > 0 && !activeTab) {
+      setActiveTab(userAllowedTabs[0].key);
+    }
+  }, [userAllowedTabs]);
 
   const handleUpdateSettings = async (calendarId, updatedFields) => {
     try {
@@ -67,14 +121,17 @@ export default function AdminPanel() {
         setMembers(membersRes.data);
         setCurrentUserId(userRes.data.id);
         setAllPermissions(permissionsRes.data);
+        console.log(membersRes.data);
+        const matchedMember = membersRes.data.find(m => m.user_id === userRes.data.id);
+        if (!matchedMember) throw new Error("Current user not found in members list");
 
-        const userMembership = membersRes.data.find(m => m.id === userRes.data.id);
-          if (!userMembership) throw new Error("Current user not found in members list");
+        setCurrentMember(matchedMember);
 
-          const effectivePerms = await axios.get(
-            `/api/calendars/${calendarId}/members/${userMembership.membership_id}/effective-permissions/`
-          );
-          setMemberPermissions(effectivePerms.data);
+        const permsRes = await axios.get(
+          `/api/calendars/${calendarId}/members/${matchedMember.id}/effective-permissions/`
+        );
+        setMemberPermissions(permsRes.data.permissions || []);
+
 
       } catch (err) {
         console.error('Failed to load calendar, members, or user:', err);
@@ -84,7 +141,7 @@ export default function AdminPanel() {
     fetchData();
   }, [calendarId]);
 
-
+  console.log(memberPermissions);
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white transition-colors">
       <div className="p-6 flex flex-col gap-6">
@@ -101,7 +158,7 @@ export default function AdminPanel() {
         <div className="flex gap-4">
           {/* Sidebar */}
           <div className="w-64 flex flex-col gap-2">
-            {tabs.map((tab) => (
+            {userAllowedTabs.map((tab) => (
               <button
                 key={tab.key}
                 className={`text-left px-3 py-2 rounded transition-colors ${

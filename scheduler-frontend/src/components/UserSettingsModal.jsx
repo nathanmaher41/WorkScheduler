@@ -8,8 +8,6 @@ export default function UserSettingsModal({ onClose }) {
         first_name: '',
         middle_name: '',
         last_name: '',
-        pronouns: '',
-        show_pronouns: true,
         show_middle_name: true,
         notify_email: true,
     });
@@ -30,8 +28,6 @@ export default function UserSettingsModal({ onClose }) {
                     first_name: res.data.first_name || '',
                     middle_name: res.data.middle_name || '',
                     last_name: res.data.last_name || '',
-                    pronouns: res.data.pronouns || '',
-                    show_pronouns: res.data.show_pronouns ?? true,
                     show_middle_name: res.data.show_middle_name ?? true,
                     notify_email: res.data.notify_email ?? true,
                 });
@@ -124,43 +120,6 @@ export default function UserSettingsModal({ onClose }) {
                                             className="w-full p-2 border rounded bg-white dark:bg-gray-800 text-black dark:text-white"
                                         />
                                     </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-
-                    {/* Identity Section */}
-                    <div>
-                        <button onClick={() => toggleSection('identity')} className="text-lg font-semibold mb-2 w-full text-left">
-                            Identity & Display {sectionsOpen.identity ? '▲' : '▼'}
-                        </button>
-                        <AnimatePresence>
-                            {sectionsOpen.identity && (
-                                <motion.div
-                                    key="identity"
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="overflow-hidden"
-                                >
-                                    <label className="block text-sm font-medium mb-1">Pronouns</label>
-                                    <input
-                                        type="text"
-                                        value={form.pronouns || ''}
-                                        onChange={e => handleChange('pronouns', e.target.value)}
-                                        className="w-full p-2 border rounded bg-white dark:bg-gray-800 text-black dark:text-white"
-                                        placeholder="e.g. they/them"
-                                    />
-                                    <label className="inline-flex items-center mt-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={form.show_pronouns}
-                                            onChange={e => handleChange('show_pronouns', e.target.checked)}
-                                            className="mr-2"
-                                        />
-                                        Display pronouns to others
-                                    </label>
                                 </motion.div>
                             )}
                         </AnimatePresence>

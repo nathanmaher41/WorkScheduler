@@ -210,18 +210,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return data
 
 class CalendarMembershipSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(source='user.id', read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     full_name = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
     is_admin = serializers.BooleanField(read_only=True)
     color = serializers.CharField()
     title_id = serializers.IntegerField(source='title.id', read_only=True)  # for dropdown selection
-    membership_id = serializers.IntegerField(source='id')
 
     class Meta:
         model = CalendarMembership
-        fields = ['id', 'username', 'full_name', 'role', 'is_admin', 'color', 'title_id', 'membership_id']
+        fields = [
+            'id',              # membership ID — keep as is
+            'user_id',         # add this for matching user
+            'username',
+            'full_name',
+            'role',
+            'is_admin',
+            'color',
+            'title_id',
+        ]
 
     def get_full_name(self, obj):
         user = obj.user if hasattr(obj, 'user') else obj

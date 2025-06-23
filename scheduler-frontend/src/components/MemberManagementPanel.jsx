@@ -170,7 +170,7 @@ export default function MembershipManagementPanel({
                 <td className="p-2">
                     {hasPermission('invite_remove_members') && m.id !== currentUserId && (
                     <button
-                    onClick={() => setConfirmRemoveMember({ id: m.id, name: m.full_name || m.username })}
+                    onClick={() => setConfirmRemoveMember({ id: m.user_id, name: m.full_name || m.username })}
                     className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
                     >
                     Remove

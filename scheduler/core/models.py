@@ -151,6 +151,9 @@ class CalendarMembership(models.Model):
         excluded = set(self.excluded_permissions.all())
         return list((role_permissions | custom) - excluded)
 
+    def has_permission(self, codename):
+        return any(p.codename == codename for p in self.get_effective_permissions())
+
     
 class ShiftSwapRequest(models.Model):
     requesting_shift = models.ForeignKey(Shift, related_name='swap_requests_sent', on_delete=models.CASCADE)

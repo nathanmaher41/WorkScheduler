@@ -28,7 +28,7 @@ export default function PermissionsPanel({ calendarId, calendar, roles: initialR
 
     const isValidId =
         permissionMode === 'Members'
-        ? members.some((m) => m.membership_id === parseInt(selectedTargetId))
+        ? members.some((m) => m.id === parseInt(selectedTargetId))
         : roles.some((r) => r.id === parseInt(selectedTargetId));
 
     if (!isValidId) {
@@ -68,7 +68,7 @@ export default function PermissionsPanel({ calendarId, calendar, roles: initialR
 
         useEffect(() => {
         setSelectedTargetId('');
-        }, [permissionMode]);
+        }, [permissionMode]); 
 
   const togglePermission = (mode, targetId, permKey) => {
     setPermissionMap((prev) => {
@@ -195,8 +195,8 @@ export default function PermissionsPanel({ calendarId, calendar, roles: initialR
           <option value="">-- Select a {permissionMode === 'Members' ? 'member' : 'role'} --</option>
           {(permissionMode === 'Members' ? members : roles).map((entity) => (
             <option
-            key={permissionMode === 'Members' ? entity.membership_id : entity.id}
-            value={permissionMode === 'Members' ? entity.membership_id : entity.id}
+            key={permissionMode === 'Members' ? entity.id : entity.id}
+            value={permissionMode === 'Members' ? entity.id : entity.id}
             >
             {permissionMode === 'Members' ? entity.full_name || entity.username : entity.name}
             </option>

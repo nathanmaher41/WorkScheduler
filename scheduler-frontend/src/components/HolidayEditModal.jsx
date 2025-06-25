@@ -11,7 +11,8 @@ export default function HolidayEditModal({ isOpen, onClose, holiday, calendarId,
     const [startPeriod, setStartPeriod] = useState('AM');
     const [endHourMinute, setEndHourMinute] = useState('');
     const [endPeriod, setEndPeriod] = useState('PM');
-
+    const [showStartTooltip, setShowStartTooltip] = useState(false);
+    const [showEndTooltip, setShowEndTooltip] = useState(false);
 
     function splitTime24(t) {
         const [h, m] = t.split(':');
@@ -42,24 +43,44 @@ export default function HolidayEditModal({ isOpen, onClose, holiday, calendarId,
     }, [holiday]);
 
     const handleSave = async () => {
-    try {
-        const payload = {
-        title,
-        note,
-        date: startDate,
-        end_date: endDate,
-        type,
-        start_time: type === 'custom' ? convertTo24Hour(startHourMinute, startPeriod) : null,
-        end_time: type === 'custom' ? convertTo24Hour(endHourMinute, endPeriod) : null,
-        };
+        if (type === 'custom') {
+            const isStartMissing = !startHourMinute.trim();
+            const isEndMissing = !endHourMinute.trim();
 
-        const res = await axios.patch(`/api/calendars/${calendarId}/holidays/${holiday.id}/`, payload);
-        onUpdate?.(res.data);
-        onClose();
-    } catch (err) {
-        console.error('❌ Failed to update holiday:', err);
-    }
-    };
+            setShowStartTooltip(isStartMissing);
+            setShowEndTooltip(isEndMissing);
+
+            if (isStartMissing || isEndMissing) return;
+        }
+
+        try {
+            const normalizedStart = type === 'custom' ? normalizeTime(startHourMinute) : null;
+            const normalizedEnd = type === 'custom' ? normalizeTime(endHourMinute) : null;
+
+            if ((type === 'custom') && (!normalizedStart || !normalizedEnd)) {
+            alert('Invalid time format');
+            return;
+            }
+
+            const payload = {
+            title,
+            note,
+            date: startDate,
+            end_date: endDate,
+            type,
+            start_time: convertTo24Hour(normalizedStart, startPeriod),
+            end_time: convertTo24Hour(normalizedEnd, endPeriod),
+            };
+
+            const res = await axios.patch(`/api/calendars/${calendarId}/holidays/${holiday.id}/`, payload);
+            onUpdate?.(res.data);
+            onClose();
+            setShowStartTooltip(false);
+            setShowEndTooltip(false);
+        } catch (err) {
+            console.error('❌ Failed to update holiday:', err);
+        }
+        };
 
     const handleDelete = async () => {
     if (!window.confirm('Delete this holiday? This cannot be undone.')) return;
@@ -72,26 +93,41 @@ export default function HolidayEditModal({ isOpen, onClose, holiday, calendarId,
     }
     };
 
+
     function formatTimeCustom(raw) {
     const cleaned = raw.replace(/\D/g, '').slice(0, 4);
     if (!cleaned) return '';
 
     const first = cleaned[0];
+    if (first === '0') return '';
+
     if (first === '1') {
-        if (cleaned.length === 1) return '1';
-        if (['0', '1', '2'].includes(cleaned[1])) {
+      if (cleaned.length === 1) return '1';
+      if (['0', '1', '2'].includes(cleaned[1])) {
         if (cleaned.length === 2) return cleaned;
         if (cleaned.length === 3) return `${cleaned.slice(0, 2)}:${cleaned[2]}`;
         return `${cleaned.slice(0, 2)}:${cleaned.slice(2, 4)}`;
-        } else {
+      } else {
         return `${first}:${cleaned.slice(1, 3)}`;
-        }
+      }
     } else {
-        if (cleaned.length === 1) return `${first}`;
-        if (cleaned.length === 2) return `${first}:${cleaned[1]}`;
-        return `${first}:${cleaned.slice(1, 3)}`;
+      if (cleaned.length === 1) return `${first}`;
+      if (cleaned.length === 2) return `${first}:${cleaned[1]}`;
+      return `${first}:${cleaned.slice(1, 3)}`;
     }
+  }
+
+  function normalizeTime(timeStr) {
+    const trimmed = timeStr?.trim?.();
+    if (!trimmed || typeof trimmed !== 'string') return null;
+    if (!trimmed.includes(':')) return `${trimmed}:00`;
+    if (trimmed.endsWith(':')) return `${trimmed}00`;
+    return trimmed;
     }
+
+
+
+
 
     function convertTo24Hour(time, period) {
         let [hours, minutes] = time.split(':').map(Number);
@@ -158,14 +194,27 @@ export default function HolidayEditModal({ isOpen, onClose, holiday, calendarId,
         <>
             <label className="block text-sm mb-1 text-black dark:text-white">Start Time</label>
             <div className="flex gap-2 mb-3">
+            <div className="relative w-full">
             <input
                 type="text"
-                placeholder="hh:mm"
+                placeholder="e.g. 9:00"
                 className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
                 value={startHourMinute}
-                onChange={(e) => setStartHourMinute(formatTimeCustom(e.target.value))}
+                onChange={(e) => {
+                setStartHourMinute(formatTimeCustom(e.target.value));
+                setShowStartTooltip(false);
+                }}
                 disabled={!isAdmin}
             />
+            {showStartTooltip && (
+                <div className="absolute left-0 top-full mt-1 z-50">
+                    <div className="relative bg-purple-600 text-white text-sm px-3 py-2 rounded shadow-lg">
+                    <div className="absolute -top-1 left-3 w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-purple-600"></div>
+                    Start time is required.
+                    </div>
+                </div>
+                )}
+            </div>
             <select
                 className="border rounded px-2 py-2 dark:bg-gray-700 dark:text-white"
                 value={startPeriod}
@@ -179,14 +228,27 @@ export default function HolidayEditModal({ isOpen, onClose, holiday, calendarId,
 
             <label className="block text-sm mb-1 text-black dark:text-white">End Time</label>
             <div className="flex gap-2 mb-3">
+            <div className="relative w-full">
             <input
                 type="text"
-                placeholder="hh:mm"
+                placeholder="e.g. 5:00"
                 className="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:text-white"
                 value={endHourMinute}
-                onChange={(e) => setEndHourMinute(formatTimeCustom(e.target.value))}
+                onChange={(e) => {
+                setEndHourMinute(formatTimeCustom(e.target.value));
+                setShowEndTooltip(false);
+                }}
                 disabled={!isAdmin}
             />
+            {showEndTooltip && (
+            <div className="absolute left-0 top-full mt-1 z-50">
+                <div className="relative bg-purple-600 text-white text-sm px-3 py-2 rounded shadow-lg">
+                <div className="absolute -top-1 left-3 w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-purple-600"></div>
+                End time is required.
+                </div>
+            </div>
+            )}
+            </div>
             <select
                 className="border rounded px-2 py-2 dark:bg-gray-700 dark:text-white"
                 value={endPeriod}

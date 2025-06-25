@@ -30,10 +30,17 @@ export default function Dashboard() {
    const [roleFilters, setRoleFilters] = useState([]);
    const [showInbox, setShowInbox] = useState(false);
    const [searchParams, setSearchParams] = useSearchParams();
+   const [currentUser, setCurrentUser] = useState(null);
 
 
 
    const currentUsername = localStorage.getItem('username');
+
+   useEffect(() => {
+    axios.get('/api/user/')
+        .then(res => setCurrentUser(res.data))
+        .catch(err => console.error('Error fetching current user:', err));
+    }, []);
 
    function useQuery() {
     return new URLSearchParams(useLocation().search);
@@ -48,16 +55,49 @@ export default function Dashboard() {
     }
     }, [searchParams, setSearchParams]);
    useEffect(() => {
-       const fetchCalendars = async () => {
-           try {
-               const res = await axios.get('/api/calendars/');
-               setCalendars(res.data);
-           } catch (err) {
-               console.error('Error fetching calendars:', err);
-           }
-       };
-       fetchCalendars();
-   }, []);
+    //    const fetchCalendars = async () => {
+    //        try {
+    //            const res = await axios.get('/api/calendars/');
+    //            setCalendars(res.data);
+    //        } catch (err) {
+    //            console.error('Error fetching calendars:', err);
+    //        }
+    //    };
+    //    fetchCalendars();
+    const fetchCalendars = async () => {
+        try {
+            const res = await axios.get('/api/calendars/');
+            const calendarsWithPermissions = await Promise.all(
+            res.data.map(async (calendar) => {
+                try {
+                const memberRes = await axios.get(`/api/calendars/${calendar.id}/members/`);
+                const currentMember = memberRes.data.find((m) => m.username === currentUser?.username);
+
+                if (!currentMember) return calendar;
+
+                const permsRes = await axios.get(
+                    `/api/calendars/${calendar.id}/members/${currentMember.id}/effective-permissions/`
+                );
+
+                return {
+                    ...calendar,
+                    currentMember,
+                    effectivePermissions: permsRes.data,
+                };
+                } catch (err) {
+                console.error(`Failed to fetch member/permissions for calendar ${calendar.id}:`, err);
+                return calendar;
+                }
+            })
+            );
+
+            setCalendars(calendarsWithPermissions);
+        } catch (err) {
+            console.error('Error fetching calendars:', err);
+        }
+        };
+        if (currentUser) fetchCalendars();
+   }, [currentUser]);
 
    useEffect(() => {
     if (searchParams.get('join') === '1') {
@@ -110,17 +150,22 @@ export default function Dashboard() {
     const token = query.get("invite_token");
 
     useEffect(() => {
-    if (token) {
-        axios.get(`/api/calendar_invites/${token}/`)
-        .then((res) => {
-            setPrefilledJoinCode(res.data.join_code);
-            setShowJoinModal(true);
-        })
-        .catch((err) => {
-            console.error("Invalid invite token", err);
-        });
-    }
-    }, [token]);
+        if (token) {
+            axios.get(`/api/calendar_invites/${token}/`)
+            .then((res) => {
+                setPrefilledJoinCode(res.data.join_code);
+                setShowJoinModal(true);
+            })
+            .catch((err) => {
+                console.error("Invalid invite token", err);
+            })
+            .finally(() => {
+                // Clean up invite_token from URL to prevent repeat modal on refresh
+                searchParams.delete('invite_token');
+                setSearchParams(searchParams, { replace: true });
+            });
+        }
+        }, [token, searchParams, setSearchParams]);
 
    const joinCalendar = async (code) => {
        try {
@@ -320,6 +365,7 @@ export default function Dashboard() {
                             setSelectedCalendar(calendar);   // ✅ Then update selected calendar
                             }}
                            isAdmin={isCurrentUserAdmin}
+                           effectivePermissions={calendar.effectivePermissions}
                            onRename={handleCalendarRename}
                            onDelete={isCurrentUserAdmin ? handleDeleteCalendar : null}
                            onShare={(calendar) => alert(`Share link or message for ${calendar.name}`)}

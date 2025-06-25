@@ -21,6 +21,7 @@ class Command(BaseCommand):
             ("assign_roles", "Can assign/change roles for others"),
             ("promote_demote_admins", "Can promote/demote members to/from admin"),
             ("send_announcements", "Can send announcements/notifications to calendar"),
+            ("manage_schedule_pushes_and_confirmations", "Can manage schedule pushes and view confirmation statuses"),
         ]
 
         created_count = 0

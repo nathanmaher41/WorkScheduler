@@ -21,14 +21,11 @@ def HasCalendarPermissionOrAdmin(required_perm):
             if not user.is_authenticated:
                 return False
 
-            # Try getting calendar_id from view.kwargs
             calendar_id = getattr(view, 'kwargs', {}).get('calendar_id')
-
-            # Fallback: derive from schedule_id if present
             if not calendar_id:
                 schedule_id = getattr(view, 'kwargs', {}).get('schedule_id')
                 if schedule_id:
-                    from core.models import Schedule  # or your actual path
+                    from core.models import Schedule
                     try:
                         calendar_id = Schedule.objects.get(id=schedule_id).calendar_id
                     except Schedule.DoesNotExist:
@@ -37,6 +34,10 @@ def HasCalendarPermissionOrAdmin(required_perm):
             if not calendar_id:
                 return False
 
+            return self.has_permission_with_calendar(request, view, calendar_id)
+
+        def has_permission_with_calendar(self, request, view, calendar_id):
+            user = request.user
             try:
                 membership = CalendarMembership.objects.get(user=user, calendar_id=calendar_id)
             except CalendarMembership.DoesNotExist:
@@ -46,8 +47,5 @@ def HasCalendarPermissionOrAdmin(required_perm):
                 membership.is_admin or
                 any(p.codename == required_perm for p in membership.get_effective_permissions())
             )
+
     return _HasCalendarPermissionOrAdmin
-
-
-    # def __call__(self):
-    #     return self

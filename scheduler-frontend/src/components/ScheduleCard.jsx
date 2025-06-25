@@ -7,7 +7,8 @@ export default function ScheduleCard({
   isAdmin,
   onEdit,
   onDelete,
-  onNotifySchedule
+  onNotifySchedule,
+  effectivePermissions
 }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -39,7 +40,7 @@ export default function ScheduleCard({
         </div>
       </button>
 
-      {isAdmin && !schedule.isDefault &&  (
+      {(isAdmin || effectivePermissions?.some(p => p.codename === 'manage_schedule_pushes_and_confirmations') || effectivePermissions?.some(p => p.codename === 'create_edit_delete_schedules')) &&  !schedule.isDefault &&  (
         <div className="absolute top-1 right-1">
           <button
             onClick={() => setShowDropdown(!showDropdown)}
@@ -52,33 +53,40 @@ export default function ScheduleCard({
               ref={dropdownRef}
               className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 shadow-lg rounded z-10 text-sm"
             >
-              <button
-                onClick={() => {
-                  setShowDropdown(false);
-                  onNotifySchedule?.(schedule);  // NEW
-                }}
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                Notify of Changes
-              </button>
-              <button
-                onClick={() => {
-                  setShowDropdown(false);
-                  onEdit(schedule);
-                }}
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => {
-                  setShowDropdown(false);
-                  setShowConfirm(true);
-                }}
-                className="w-full text-left px-3 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                Delete
-              </button>
+              {(isAdmin || effectivePermissions?.some(p => p.codename === 'manage_schedule_pushes_and_confirmations')) && (
+                <button
+                  onClick={() => {
+                    setShowDropdown(false);
+                    onNotifySchedule?.(schedule);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Notify of Changes
+                </button>
+              )}
+              
+              {(isAdmin || effectivePermissions?.some(p => p.codename === 'create_edit_delete_schedules')) && (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowDropdown(false);
+                      onEdit(schedule);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDropdown(false);
+                      setShowConfirm(true);
+                    }}
+                    className="w-full text-left px-3 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

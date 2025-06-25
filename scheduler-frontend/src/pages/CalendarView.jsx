@@ -863,6 +863,7 @@ export default function CalendarView() {
               <li key={schedule.id}>
                 <ScheduleCard
                   key={schedule.id + schedule.name + schedule.start_date + schedule.end_date}
+                  effectivePermissions={effectivePermissions}
                   schedule={schedule}
                   isActive={activeSchedule?.id === schedule.id}
                   onSelect={handleScheduleSelect}

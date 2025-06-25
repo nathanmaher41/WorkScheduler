@@ -9,21 +9,23 @@ export default function MembershipManagementPanel({
   permissions = [],
   roles = [], // passed in from AdminPanel
   allPermissions = [],
-  members = []
+  members = [],
+  onMemberUpdate
 }) {
     const [localMembers, setLocalMembers] = useState(members);
     const [editingColorMemberId, setEditingColorMemberId] = useState(null);
     const [confirmRemoveMember, setConfirmRemoveMember] = useState(null);
-    const currentUserMembership = members.find(m => m.id === currentUserId);
+    const currentUserMembership = members.find(m => m.user_id === currentUserId);
+    const [showShareModal, setShowShareModal] = useState(false);
+
     const isAdmin = currentUserMembership?.is_admin;
-    const hasPermission = (perm) =>
-        Array.isArray(permissions) && permissions.some((p) => p.codename === perm) || isAdmin;
     const handleColorChange = async (memberId, newColor) => {
     try {
         await axios.patch(`/api/calendars/${calendarId}/members/${memberId}/`, { color: newColor });
         setLocalMembers((prev) =>
-        prev.map((m) => (m.id === memberId ? { ...m, color: newColor } : m))
+        prev.map((m) => (m.user_id === memberId ? { ...m, color: newColor } : m))
         );
+        onMemberUpdate();
     } catch (err) {
         console.error('Failed to update color:', err);
     }
@@ -33,8 +35,9 @@ export default function MembershipManagementPanel({
     try {
         await axios.patch(`/api/calendars/${calendarId}/members/${memberId}/`, { title: newTitleId });
         setLocalMembers((prev) =>
-        prev.map((m) => (m.id === memberId ? { ...m, title_id: newTitleId } : m))
+        prev.map((m) => (m.user_id === memberId ? { ...m, title_id: newTitleId } : m))
         );
+        onMemberUpdate();
     } catch (err) {
         console.error('Failed to update role:', err);
     }
@@ -50,7 +53,7 @@ export default function MembershipManagementPanel({
     const handleRemoveMember = async (memberId, memberName) => {
         try {
             await axios.delete(`/api/calendars/${calendarId}/members/${memberId}/remove/`);
-            setLocalMembers(prev => prev.filter(m => m.id !== memberId));
+            setLocalMembers(prev => prev.filter(m => m.user_id !== memberId));
             setConfirmRemoveMember(null); // close the modal
         } catch (err) {
             console.error('Failed to remove member:', err);
@@ -61,14 +64,16 @@ export default function MembershipManagementPanel({
         setLocalMembers(members);
     }, [members]);
 
+    console.log(permissions);
+
     return (
     <div className="space-y-4">
         <div className="flex justify-between items-center">
         <h3 className="text-xl font-semibold text-black dark:text-white">Manage Members</h3>
-        {hasPermission('invite_remove_members') && (
+        {(isAdmin || permissions.some(p => p.codename === 'invite_remove_members')) && (
             <button
             className="px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
-            onClick={() => alert('📨 Invite flow not implemented yet')}
+            onClick={() => setShowShareModal(true)}
             >
             Invite Member
             </button>
@@ -97,10 +102,10 @@ export default function MembershipManagementPanel({
                     className="w-5 h-5 rounded-full border-2"
                     style={{ backgroundColor: m.color || '#ccc' }}
                     onClick={() =>
-                    hasPermission('manage_colors') && setEditingColorMemberId(m.id)
+                    (isAdmin || permissions.some(p => p.codename === 'manage_colors')) && setEditingColorMemberId(m.user_id)
                     }
                 />
-                {editingColorMemberId === m.id && (
+                {editingColorMemberId === m.user_id && (
                     <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex justify-center items-center">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full relative">
                         <h4 className="text-md font-semibold mb-4 text-black dark:text-white text-center">
@@ -108,7 +113,7 @@ export default function MembershipManagementPanel({
                         </h4>
                         <div className="grid grid-cols-6 gap-3 justify-items-center">
                             {availableColors.map((color) => {
-                            const isUsed = members.some(mem => mem.id !== m.id && mem.color === color);
+                            const isUsed = members.some(mem => mem.user_id !== m.user_id && mem.color === color);
                             const isSelected = m.color === color;
 
                             return (
@@ -116,7 +121,7 @@ export default function MembershipManagementPanel({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                    handleColorChange(m.id, color);
+                                    handleColorChange(m.user_id, color);
                                     setEditingColorMemberId(null);
                                     }}
                                     disabled={isUsed && !isSelected}
@@ -149,10 +154,10 @@ export default function MembershipManagementPanel({
                     )}
                 </td>
                 <td className="p-2">
-                    {hasPermission('assign_roles') ? (
+                    {isAdmin || permissions.some(p => p.codename === 'assign_roles') ? (
                     <select
                         value={m.title_id ?? ''}
-                        onChange={(e) => handleRoleChange(m.id, e.target.value)}
+                        onChange={(e) => handleRoleChange(m.user_id, e.target.value)}
                         className="border rounded px-2 py-1 dark:bg-gray-800 dark:text-white"
                         >
                         {(m.title_id === null || m.title_id === undefined) && (
@@ -169,7 +174,7 @@ export default function MembershipManagementPanel({
                     )}
                 </td>
                 <td className="p-2">
-                    {hasPermission('invite_remove_members') && m.id !== currentUserId && (
+                    {(isAdmin || permissions.some(p => p.codename === 'invite_remove_members')) && m.user_id !== currentUserId && (
                     <button
                     onClick={() => setConfirmRemoveMember({ id: m.user_id, name: m.full_name || m.username })}
                     className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
@@ -210,6 +215,12 @@ export default function MembershipManagementPanel({
             </div>
             )}
         </div>
+        {showShareModal && (
+        <ShareInviteModal
+            calendarId={calendarId}
+            onClose={() => setShowShareModal(false)}
+        />
+        )}
     </div>
     );
 }

@@ -21,10 +21,21 @@ export default function Login() {
 
       navigate('/dashboard');
     } catch (err) {
-      if (err.response?.status === 401) {
-        setError('Incorrect username or password.');
+      if (err.response?.data?.detail) {
+        // DRF's default error message format (e.g. "No active account found...")
+        setError(err.response.data.detail);
+      } else if (Array.isArray(err.response?.data) && err.response.data.length > 0) {
+        // Handles case like: ["Incorrect username or password."]
+        setError(err.response.data[0]);
+      } else if (typeof err.response?.data === 'object') {
+        // Handles custom messages from your serializer
+        const firstKey = Object.keys(err.response.data)[0];
+        const msg = err.response.data[firstKey];
+        setError(Array.isArray(msg) ? msg[0] : msg);
+      } else if (err.message === 'Network Error') {
+        setError('Network error. Please check your internet connection.');
       } else {
-        setError('Something went wrong. Try again.');
+        setError('Unexpected error. Please try again.');
       }
     }
   };

@@ -94,6 +94,7 @@ export default function ShiftCreateModal({
     if (!cleaned) return '';
 
     const first = cleaned[0];
+    if (first === '0') return '';
 
     if (first === '1') {
       if (cleaned.length === 1) return '1';

@@ -4,13 +4,13 @@ import EditCalendarNameModal from './EditCalendarNameModal';
 import ConfirmDeleteCalendarModal from './ConfirmDeleteCalendarModal';
 import ShareInviteModal from './ShareInviteModal';
 
-function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMenuOpen, onToggleMenu, isAdmin, onRename }) {
+function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMenuOpen, onToggleMenu, isAdmin, onRename, effectivePermissions }) {
   const navigate = useNavigate();
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   
-
+  console.log("PERMS", effectivePermissions);
   const dropdownItemClass =
     'w-full text-left px-4 py-2 text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-600';
 
@@ -40,19 +40,24 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
         </button>
 
         {isMenuOpen && (
-          <div
-            className="absolute right-0 mt-2 w-40 shadow-lg rounded-md z-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            onClick={(e) => e.stopPropagation()}
+        <div
+          className="absolute right-0 mt-2 w-40 shadow-lg rounded-md z-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(calendar.join_code);
+              onToggleMenu();
+            }}
+            className={dropdownItemClass}
           >
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(calendar.join_code);
-                onToggleMenu();
-              }}
-              className={dropdownItemClass}
-            >
-              📋 Copy Invite Code
-            </button>
+            📋 Copy Invite Code
+          </button>
+
+          {(isAdmin ||
+            effectivePermissions?.permissions?.some(
+              (p) => p.codename === 'invite_remove_members'
+            )) && (
             <button
               onClick={() => {
                 setShowShareModal(true);
@@ -62,32 +67,36 @@ function CalendarCard({ calendar, isSelected, onSelect, onDelete, onShare, isMen
             >
               📤 Share
             </button>
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => {
-                    setShowEditModal(true);
-                    onToggleMenu();
-                  }}
-                  className={dropdownItemClass}
-                >
-                  ✏️ Edit Name
-                </button>
-              </>
-            )}
-            {onDelete && (
-              <button
-                onClick={() => {
-                  setShowDeleteModal(true);
-                  onToggleMenu();
-                }}
-                className="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600"
-              >
-                🗑️ Delete
-              </button>
-            )}
-          </div>
-        )}
+          )}
+
+          {(isAdmin ||
+            effectivePermissions?.permissions?.some(
+              (p) => p.codename === 'manage_calendar_settings'
+            )) && (
+            <button
+              onClick={() => {
+                setShowEditModal(true);
+                onToggleMenu();
+              }}
+              className={dropdownItemClass}
+            >
+              ✏️ Edit Name
+            </button>
+          )}
+
+          {isAdmin && onDelete && (
+            <button
+              onClick={() => {
+                setShowDeleteModal(true);
+                onToggleMenu();
+              }}
+              className="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100 dark:hover:bg-gray-600"
+            >
+              🗑️ Delete
+            </button>
+          )}
+        </div>
+      )}
       </div>
 
       <h2 className="text-lg font-semibold">Calendar: {calendar.name}</h2>

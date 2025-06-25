@@ -41,7 +41,7 @@ export default function AdminPanel() {
   {
     key: 'schedule',
     label: '📅 Schedule Management',
-    permission: 'create_edit_delete_schedules',
+    permissionCheck: () => userHasPermission('manage_schedule_pushes_and_confirmations') || userHasPermission('create_edit_delete_schedules'),
   },
   {
     key: 'swaps',
@@ -76,7 +76,7 @@ export default function AdminPanel() {
   },
 ];
 
-
+  console.log("HELLO???", currentMember?.is_admin);
   function userHasPermission(perm) {
     if (!perm || currentMember?.is_admin) return true;
     return Array.isArray(memberPermissions) && memberPermissions.some(p => p.codename === perm);
@@ -93,6 +93,15 @@ export default function AdminPanel() {
       setActiveTab(userAllowedTabs[0].key);
     }
   }, [userAllowedTabs]);
+
+  const refetchMembers = async () => {
+    try {
+      const membersRes = await axios.get(`/api/calendars/${calendarId}/members/`);
+      setMembers(membersRes.data);
+    } catch (err) {
+      console.error('Failed to refetch members:', err);
+    }
+  };
 
   const handleUpdateSettings = async (calendarId, updatedFields) => {
     try {
@@ -183,7 +192,7 @@ export default function AdminPanel() {
             className="flex-1 p-4 bg-white dark:bg-gray-800 rounded shadow"
           >
             {activeTab === 'members' &&<MembershipManagementPanel calendarId={calendarId} roles={calendarRoles} currentUserId={currentUserId} permissions={memberPermissions}
-            allPermissions={allPermissions} members={members}/>}
+            allPermissions={allPermissions} members={members} onMemberUpdate={refetchMembers}/>}
             {activeTab === 'roles' && <RolesPanel calendarId={calendarId} roles={calendarRoles} />}
             {activeTab === 'permissions' && (
               <PermissionsPanel
@@ -194,9 +203,9 @@ export default function AdminPanel() {
                 onUpdateSettings={handleUpdateSettings}
               />
             )}
-            {activeTab === 'schedule' && <ScheduleManagementPanel calendarId={calendarId}/>}
+            {activeTab === 'schedule' && <ScheduleManagementPanel calendarId={calendarId} effectivePermissions={memberPermissions} currentMember={currentMember}/>}
             {activeTab === 'timeoff' && <TimeOffRequestsPanel calendarId={calendarId} />}
-            {activeTab === 'swaps' && <SwapsAndTakesPanel calendarId={calendarId} />} {/* ✅ */}
+            {activeTab === 'swaps' && <SwapsAndTakesPanel calendarId={calendarId} effectivePermissions={memberPermissions} currentMember={currentMember} />} {/* ✅ */}
             {activeTab === 'announcements' && <AnnouncementsPanel calendarId={calendarId} />}
             {activeTab === 'history' && <HistoryPanel calendarId={calendarId}/>}
           </motion.div>

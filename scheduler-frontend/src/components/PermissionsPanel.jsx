@@ -169,8 +169,8 @@ export default function PermissionsPanel({ calendarId, calendar, roles: initialR
     </CollapsibleSection>
     <CollapsibleSection title="Permissions">
       {/* View Mode Toggle */}
-      <div className="flex space-x-2 mb-4 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
-        {['Members', 'Roles', 'Overview'].map((mode) => (
+      <div className="flex space-x-2 mb-4 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden border border-gray-900 dark:border-gray-100">
+        {['Members', 'Roles'].map((mode) => (
           <button
             key={mode}
             className={`flex-1 py-2 text-sm font-medium transition ${

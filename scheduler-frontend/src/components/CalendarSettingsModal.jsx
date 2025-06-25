@@ -158,7 +158,6 @@ export default function CalendarSettingsModal({ isOpen, onClose, calendar, membe
     members.find(m => m.user_id === currentUserId)?.color || ''
     );
 
-    // const currentMember = members.find(m => m.id === currentUserId);
 
     function titleCase(str) {
     return str.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());

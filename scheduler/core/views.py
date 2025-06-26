@@ -227,7 +227,7 @@ class ActivateUserView(APIView):
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
 
-            frontend_url = f"https://schedulounge.netlify.app/activate-success?access={access_token}&refresh={refresh_token}"
+            frontend_url = f"{settings.frontend_url}/activate-success?access={access_token}&refresh={refresh_token}"
             return redirect(frontend_url)
 
         return HttpResponse("Invalid or expired activation link.", status=400)
@@ -781,7 +781,7 @@ class CalendarInviteView(APIView):
             )
 
         # Send email
-        invite_link = f"https://schedulounge.netlify.app/join/{token}/"
+        invite_link = f"{settings.frontend_url}/join/{token}/"
         if is_email:
             if resolved_user and resolved_user.notify_email:
                 subject = f"You're invited to join {calendar.name}"

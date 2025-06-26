@@ -210,24 +210,6 @@ class RegisterView(generics.CreateAPIView):
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-    def post(self, request, *args, **kwargs):
-        from core.models import User
-
-        username = request.data.get('username')
-        raw_password = request.data.get('password')
-
-        if username and raw_password:
-            try:
-                user = User.objects.get(username=username)
-                t1 = time.time()
-                check_password(raw_password, user.password)
-                t2 = time.time()
-                print(f"[HASH DEBUG] check_password took {t2 - t1:.2f}s")
-            except User.DoesNotExist:
-                pass  # Don't leak info
-
-        return super().post(request, *args, **kwargs)
-
 class ActivateUserView(APIView):
     permission_classes = [AllowAny]
 

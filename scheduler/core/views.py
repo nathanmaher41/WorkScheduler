@@ -225,7 +225,7 @@ class ActivateUserView(APIView):
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
 
-            frontend_url = f"http://localhost:5173/activate-success?access={access_token}&refresh={refresh_token}"
+            frontend_url = f"{settings.FRONTEND_URL}/activate-success?access={access_token}&refresh={refresh_token}"
             return redirect(frontend_url)
 
         return HttpResponse("Invalid or expired activation link.", status=400)
@@ -2410,7 +2410,7 @@ class PasswordResetRequestView(APIView):
 
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        reset_link = f"http://localhost:5173/reset-password/{uid}/{token}/"
+        reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
 
 
         subject = 'Reset Your ScheduLounge Password'

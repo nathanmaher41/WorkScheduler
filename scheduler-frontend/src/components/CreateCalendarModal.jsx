@@ -114,7 +114,7 @@ export default function CreateCalendarModal({ onClose, onCreate }) {
           </label>
         </div>
 
-        <label className="block mb-2 font-medium">Optional Role Tags</label>
+        <label className="block mb-2 font-medium">Add Additonal Roles</label>
         <div className="flex gap-2 mb-2">
           <input
             type="text"

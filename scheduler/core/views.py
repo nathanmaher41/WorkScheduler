@@ -89,6 +89,7 @@ from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.utils.crypto import get_random_string
 import time
+from django.contrib.auth.hashers import check_password
 
 
 
@@ -210,11 +211,23 @@ class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
-        start_time = time.time()
-        response = super().post(request, *args, **kwargs)
-        duration = time.time() - start_time
-        print(f"[LOGIN DEBUG] Login request took {duration:.2f} seconds")
-        return response
+        from core.models import User  # or wherever your User model is
+
+        email = request.data.get('email')  # or username
+        raw_password = request.data.get('password')
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"error": "Invalid"}, status=400)
+
+        t1 = time.time()
+        result = check_password(raw_password, user.password)
+        t2 = time.time()
+
+        print(f"[HASH DEBUG] check_password took {t2 - t1:.2f}s")
+
+        return super().post(request, *args, **kwargs)
 
 class ActivateUserView(APIView):
     permission_classes = [AllowAny]

@@ -5,7 +5,7 @@ def seed_calendar_permissions(apps, schema_editor):
     permissions = [
         ("manage_calendar_settings", "Can manage calendar settings (rename calendar, toggle rules)"),
         ("manage_roles", "Can manage roles (create, rename, delete roles)"),
-        ('manage_colors', "Can change a members color")
+        ('manage_colors', "Can change a members color"),
         ("create_edit_delete_schedules", "Can create/edit/delete schedules"),
         ("create_edit_delete_shifts", "Can create/edit/delete shifts"),
         ("approve_reject_swap_requests", "Can approve/reject shift swap requests"),

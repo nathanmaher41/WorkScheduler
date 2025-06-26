@@ -211,21 +211,20 @@ class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
-        from core.models import User  # or wherever your User model is
+        from core.models import User
 
-        email = request.data.get('email')  # or username
+        username = request.data.get('username')
         raw_password = request.data.get('password')
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({"error": "Invalid"}, status=400)
-
-        t1 = time.time()
-        result = check_password(raw_password, user.password)
-        t2 = time.time()
-
-        print(f"[HASH DEBUG] check_password took {t2 - t1:.2f}s")
+        if username and raw_password:
+            try:
+                user = User.objects.get(username=username)
+                t1 = time.time()
+                check_password(raw_password, user.password)
+                t2 = time.time()
+                print(f"[HASH DEBUG] check_password took {t2 - t1:.2f}s")
+            except User.DoesNotExist:
+                pass  # Don't leak info
 
         return super().post(request, *args, **kwargs)
 

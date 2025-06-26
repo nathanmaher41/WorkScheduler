@@ -100,9 +100,11 @@ LOGGING = {
 
 #CORS_ALLOWED_ORIGINS = ['http://localhost:5173']
 
-CORS_ALLOWED_ORIGINS = [
-    os.getenv("FRONTEND_URL", "http://localhost:5173")
-]
+CORS_ALLOWED_ORIGINS = []
+
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url and frontend_url.startswith("http"):
+    CORS_ALLOWED_ORIGINS.append(frontend_url)
 
 ROOT_URLCONF = 'scheduler.urls'
 

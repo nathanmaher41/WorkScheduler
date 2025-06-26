@@ -208,6 +208,13 @@ class RegisterView(generics.CreateAPIView):
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+    def post(self, request, *args, **kwargs):
+        start_time = time.time()
+        response = super().post(request, *args, **kwargs)
+        duration = time.time() - start_time
+        print(f"[LOGIN DEBUG] Login request took {duration:.2f} seconds")
+        return response
+
 class ActivateUserView(APIView):
     permission_classes = [AllowAny]
 
